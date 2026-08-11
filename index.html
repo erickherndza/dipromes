@@ -1,0 +1,2732 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DIPROMES</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --brand:#1B6B2E;--brand-l:#144F22;--brand-dim:rgba(27,107,46,0.08);--brand-dim2:rgba(27,107,46,0.15);
+  --bg:#ffffff;--bg2:#f4f6f8;--bg3:#e8ecf0;
+  --text:#1c2028;--text2:#4a5568;--text3:#9aa5b4;
+  --border:rgba(0,0,0,0.1);--border2:rgba(0,0,0,0.18);
+  --r:6px;--rl:8px;
+  --ok:#1a9b6c;--ok-bg:#e6f5ef;--ok-t:#0d6644;
+  --warn:#d4860a;--warn-bg:#fef3dc;--warn-t:#7a4e00;
+  --danger:#d63c3c;--danger-bg:#fdeaea;--danger-t:#9b1c1c;
+  --info:#2563EB;--info-bg:#EFF6FF;--info-t:#1d4ed8;
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg3);color:var(--text);font-size:14px;line-height:1.5}
+
+/* ── LAYOUT ── */
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:220px;background:var(--bg);border-right:0.5px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:width .2s}
+.sidebar.collapsed{width:56px}
+.sidebar-logo{padding:16px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;gap:10px;min-height:56px}
+.logo-mark{width:28px;height:28px;background:var(--brand);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-weight:700;font-size:13px}
+.logo-text{overflow:hidden}
+.logo-name{font-size:14px;font-weight:600;color:var(--brand);white-space:nowrap}
+.logo-sub{font-size:10px;color:var(--text3);white-space:nowrap}
+.nav{flex:1;padding:8px 0;overflow-y:auto}
+.nav-section{font-size:10px;font-weight:600;color:var(--text3);padding:10px 16px 3px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden}
+.sidebar.collapsed .nav-section{opacity:0}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;color:var(--text2);font-size:13px;border-left:2.5px solid transparent;transition:all .15s;white-space:nowrap;overflow:hidden}
+.nav-item:hover{background:var(--bg2);color:var(--text)}
+.nav-item.active{background:var(--brand-dim);color:var(--brand);border-left-color:var(--brand);font-weight:600}
+.nav-item i{font-size:17px;flex-shrink:0}
+.sidebar.collapsed .nav-item{padding:10px;justify-content:center}
+.sidebar.collapsed .nav-item span{display:none}
+.sidebar.collapsed .nav-section{padding:8px}
+.nav-footer{padding:12px 16px;border-top:0.5px solid var(--border);font-size:11px;color:var(--text3)}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:52px;background:var(--bg);border-bottom:0.5px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:10px;flex-shrink:0}
+.topbar-toggle{background:none;border:none;cursor:pointer;color:var(--text2);font-size:20px;padding:4px;border-radius:6px}
+.topbar-toggle:hover{background:var(--bg2)}
+.topbar-title{font-size:15px;font-weight:600;flex:1}
+.content{flex:1;overflow-y:auto;padding:20px}
+
+/* ── BOTONES ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r);border:0.5px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;font-size:13px;font-family:inherit;transition:background .15s;white-space:nowrap}
+.btn:hover{background:var(--bg2)}
+.btn-primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+.btn-primary:hover{background:var(--brand-l)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-ghost{border-color:transparent}.btn-ghost:hover{border-color:var(--border)}
+.btn-ok{background:var(--ok-bg);color:var(--ok-t);border-color:transparent}
+.btn-danger{background:var(--danger-bg);color:var(--danger-t);border-color:transparent}
+
+/* ── CARDS / MÉTRICAS ── */
+.card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:16px 20px;margin-bottom:16px}
+.card-title{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.metric{background:var(--bg2);border-radius:var(--r);padding:14px 16px}
+.metric-label{font-size:11px;color:var(--text2);margin-bottom:5px}
+.metric-val{font-size:24px;font-weight:700}
+.metric-val.ok{color:var(--ok)}.metric-val.warn{color:var(--warn)}.metric-val.danger{color:var(--danger)}
+.metric-sub{font-size:11px;color:var(--text3);margin-top:3px}
+
+/* ── TABLA ── */
+.tbl-wrap{overflow:hidden;border-radius:var(--rl);border:0.5px solid var(--border)}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{font-weight:700;color:var(--text2);text-align:left;padding:9px 13px;border-bottom:0.5px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.04em;background:var(--bg2);white-space:nowrap}
+.tbl td{padding:10px 13px;border-bottom:0.5px solid var(--border);vertical-align:middle}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tbl tbody tr{transition:background .1s;cursor:pointer}
+.tbl tbody tr:hover{background:var(--bg2)}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:100px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge-ok{background:var(--ok-bg);color:var(--ok-t)}
+.badge-warn{background:var(--warn-bg);color:var(--warn-t)}
+.badge-danger{background:var(--danger-bg);color:var(--danger-t)}
+.badge-info{background:var(--info-bg);color:var(--info-t)}
+.badge-gray{background:var(--bg2);color:var(--text2)}
+.badge-brand{background:var(--brand-dim2);color:var(--brand)}
+
+/* ── MODALES ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px}
+.modal{background:var(--bg);border-radius:var(--rl);border:0.5px solid var(--border);padding:24px;width:620px;max-width:100%;max-height:90vh;overflow-y:auto;position:relative}
+.modal-lg{width:760px}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:16px}
+.modal-close{position:absolute;top:14px;right:16px;background:none;border:none;cursor:pointer;color:var(--text3);font-size:22px;line-height:1;font-family:inherit;padding:2px 6px;border-radius:4px}
+.modal-close:hover{background:var(--bg2);color:var(--text)}
+
+/* ── FORMULARIOS ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px}
+.form-grid.cols3{grid-template-columns:1fr 1fr 1fr}
+.form-group{margin-bottom:12px}
+.form-group.span2{grid-column:span 2}
+.form-group label{display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.form-group input,.form-group select,.form-group textarea{width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:8px 10px;font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;transition:border .15s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--brand)}
+.form-group textarea{resize:vertical;min-height:65px}
+.section-divider{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:10px 0 6px;border-bottom:0.5px solid var(--border);margin-bottom:10px;grid-column:span 2}
+
+/* ── TABS ── */
+.tabs{display:flex;border-bottom:0.5px solid var(--border);margin-bottom:16px;gap:2px}
+.tab{padding:9px 16px;cursor:pointer;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;transition:color .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--brand);border-bottom-color:var(--brand);font-weight:600}
+
+/* ── MISC ── */
+.progress{height:6px;background:var(--bg2);border-radius:3px;overflow:hidden}
+.progress-bar{height:100%;border-radius:3px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-ok{background:var(--ok)}.dot-warn{background:var(--warn)}.dot-danger{background:var(--danger)}
+.avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;background:var(--brand-dim);color:var(--brand)}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px}
+.info-row:last-child{border-bottom:none}
+.info-label{color:var(--text2);flex-shrink:0;margin-right:12px}
+.info-val{font-weight:500;text-align:right}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text3)}
+.empty-state i{font-size:36px;display:block;margin-bottom:10px;color:var(--border2)}
+.conn-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--brand);background:var(--brand-dim);padding:2px 8px;border-radius:100px;font-weight:600}
+.search-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:0.5px solid var(--border)}
+.search-bar input,.search-bar select{border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--bg);color:var(--text);outline:none;font-family:inherit}
+.search-bar input{flex:1;min-width:160px}
+.maq-card{background:var(--bg2);border-radius:var(--r);padding:12px 14px;border:0.5px solid var(--border);cursor:pointer;transition:all .15s;position:relative}
+.maq-card:hover{border-color:var(--brand);background:var(--brand-dim)}
+.maq-card.activa{border-color:var(--ok);background:var(--ok-bg)}
+.maq-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+
+/* ── PRODUCTOS ── */
+.prod-row{display:grid;grid-template-columns:1fr 70px 100px 32px;gap:6px;align-items:center;margin-bottom:6px}
+.prod-row input{border:0.5px solid var(--border2);border-radius:var(--r);padding:6px 8px;font-size:12px;font-family:inherit;background:var(--bg);color:var(--text);outline:none}
+.prod-row input:focus{border-color:var(--brand)}
+.prod-total{font-size:12px;font-weight:700;color:var(--brand);padding:6px 0;text-align:right}
+
+/* ── GALERÍA FOTOS ── */
+.foto-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.foto-thumb{width:72px;height:72px;object-fit:cover;border-radius:var(--r);border:0.5px solid var(--border);cursor:pointer;transition:opacity .15s}
+.foto-thumb:hover{opacity:.8}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:500;cursor:pointer}
+.lightbox img{max-width:90vw;max-height:90vh;border-radius:var(--rl)}
+
+/* ── LOGIN ── */
+.login-screen{position:fixed;inset:0;background:var(--bg3);display:flex;align-items:center;justify-content:center;z-index:1000}
+.login-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:40px 36px;width:340px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+.login-logo{width:52px;height:52px;background:var(--brand);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:#fff;font-size:20px;font-weight:700}
+
+/* ── PRINT ── */
+@media print{
+  .app,.sidebar,.topbar{display:none!important}
+  #print-area{display:block!important}
+  body{background:#fff;color:#000}
+}
+#print-area{display:none}
+.print-header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #1B6B2E;padding-bottom:12px;margin-bottom:20px}
+.print-logo{width:48px;height:48px;background:#1B6B2E;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px}
+.print-title{font-size:20px;font-weight:700;color:#7B1A1A}
+.print-sub{font-size:11px;color:#666}
+.print-section{margin-bottom:16px}
+.print-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#666;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px}
+.print-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px dotted #eee}
+.print-row:last-child{border-bottom:none}
+.print-prod-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+.print-prod-table th{text-align:left;padding:4px 8px;background:#f5f5f5;border:1px solid #ddd}
+.print-prod-table td{padding:4px 8px;border:1px solid #ddd}
+.print-firmas{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}
+.print-firma{text-align:center}
+.print-firma-line{border-bottom:1px solid #000;margin-bottom:6px;height:40px}
+.print-firma-label{font-size:11px;color:#666}
+</style>
+</head>
+<body>
+<div class="app" style="display:none">
+
+<!-- ══ SIDEBAR ══ -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark"><i class="ti ti-medical-cross" style="font-size:15px"></i></div>
+    <div class="logo-text">
+      <div class="logo-name">DIPROMES</div>
+      <div class="logo-sub">Dist. Prod. Médicos</div>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-section">Principal</div>
+    <div class="nav-item active" onclick="go('dashboard')" id="nav-dashboard"><i class="ti ti-layout-dashboard"></i><span>Dashboard</span></div>
+    <div class="nav-section">Pacientes</div>
+    <div class="nav-item" onclick="go('pacientes')" id="nav-pacientes"><i class="ti ti-users"></i><span>Pacientes</span></div>
+    <div class="nav-item" onclick="go('colocaciones')" id="nav-colocaciones"><i class="ti ti-stack-2"></i><span>Colocaciones</span></div>
+    <div class="nav-item" onclick="go('mapa')" id="nav-mapa"><i class="ti ti-map-pin"></i><span>Mapa GPS</span></div>
+    <div class="nav-item" onclick="go('registro')" id="nav-registro"><i class="ti ti-clipboard-list"></i><span>Registro completo</span></div>
+    <div class="nav-section">Inventario</div>
+    <div class="nav-item" onclick="go('maquinas')" id="nav-maquinas"><i class="ti ti-device-laptop-medical"></i><span>Máquinas</span></div>
+    <div class="nav-section">Conduces</div>
+    <div class="nav-item" onclick="go('facturacion')" id="nav-facturacion"><i class="ti ti-receipt"></i><span>Condu. Descargo</span></div>
+    <div class="nav-section admin-only" style="display:none">Administración</div>
+    <div class="nav-item admin-only" onclick="go('usuarios')" id="nav-usuarios" style="display:none"><i class="ti ti-users-group"></i><span>Usuarios</span></div>
+  </div>
+  <div class="nav-footer" id="nav-footer-text" style="padding:10px 16px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px">v1.0 · DIPROMES</div>
+    <button class="btn btn-sm btn-ghost" style="justify-content:flex-start;font-size:11px;padding:4px 8px;width:100%" onclick="abrirGestionDB()">
+      <i class="ti ti-database-cog" style="font-size:13px"></i><span>Gestión de base de datos</span>
+    </button>
+  </div>
+</div>
+
+<!-- ══ MAIN ══ -->
+<div class="main">
+  <div class="topbar">
+    <button class="topbar-toggle" onclick="toggleSidebar()" title="Menú"><i class="ti ti-menu-2"></i></button>
+    <div class="topbar-title" id="view-title">Dashboard</div>
+    <button class="btn btn-sm btn-ghost" onclick="abrirImportarExcel()" id="btn-import" style="display:none"><i class="ti ti-upload"></i>Importar Excel</button>
+    <button class="btn btn-primary btn-sm" id="btn-nuevo" onclick="handleNuevo()"><i class="ti ti-plus"></i><span id="btn-nuevo-label">Nuevo</span></button>
+  </div>
+  <div class="content" id="content"></div>
+</div>
+</div>
+<div id="modal-root"></div>
+<div id="print-area" style="display:none"></div>
+
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="login-screen" class="login-screen" style="display:none">
+  <div class="login-card">
+    <div class="login-logo"><i class="ti ti-medical-cross" style="font-size:22px"></i></div>
+    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px">DIPROMES</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:24px">Distribuidora de Productos Médicos y Servicios</div>
+    <div class="form-group" style="text-align:left">
+      <label>Usuario</label>
+      <input type="text" id="login-user" placeholder="usuario" autocomplete="username" onkeydown="if(event.key==='Enter')login()">
+    </div>
+    <div class="form-group" style="text-align:left">
+      <label>Contraseña</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')login()">
+    </div>
+    <div id="login-error" style="font-size:12px;color:var(--danger-t);margin-bottom:10px;display:none">Usuario o contraseña incorrectos.</div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="login()"><i class="ti ti-login"></i>Entrar</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// API — REST client
+// ══════════════════════════════════════════════════════════════════════════════
+const api = {
+  async get(path){ const r=await fetch('/api'+path); if(!r.ok) throw new Error(r.statusText); return r.json(); },
+  async post(path,data){ const r=await fetch('/api'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); if(!r.ok) throw new Error(r.statusText); return r.json(); },
+  async put(path,data){ const r=await fetch('/api'+path,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); if(!r.ok) throw new Error(r.statusText); return r.json(); },
+  async del(path){ const r=await fetch('/api'+path,{method:'DELETE'}); if(!r.ok) throw new Error(r.statusText); return r.json(); },
+};
+
+async function initDB(){
+  const [maq,reg,pm,usr,ars] = await Promise.all([
+    api.get('/maquinas'),
+    api.get('/registros'),
+    api.get('/pacientes-master'),
+    api.get('/usuarios'),
+    api.get('/config/ars'),
+  ]);
+  DB.maquinas = maq;
+  DB.registros = reg;
+  DB.pacientes_master = pm;
+  DB.usuarios = usr;
+  DB.ars = ars || ['Privado','ARS Humano','ARS Senasa','ARS Universal','Otro'];
+  // Recalculate paciente_actual (computed field from server, rebuild locally too)
+  DB.maquinas.forEach(m=>m.paciente_actual=null);
+  DB.registros.filter(r=>r.estatus==='Activo'&&r.maquina).forEach(r=>{
+    const m=DB.maquinas.find(x=>x.id===r.maquina);
+    if(m) m.paciente_actual=r.nombre;
+  });
+}
+
+function abrirGestionDB(){
+  const totalReg=DB.registros.length;
+  const totalMaq=DB.maquinas.length;
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal" style="max-width:440px">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title"><i class="ti ti-database-cog"></i> Gestión de base de datos</div>
+  <div style="font-size:12px;color:var(--text-light);margin-bottom:16px">
+    Base de datos actual: <strong>${totalReg} registros</strong> · <strong>${totalMaq} máquinas</strong>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:8px">
+
+    <div style="border:1px solid var(--border);border-radius:var(--r);padding:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px"><i class="ti ti-download" style="font-size:13px"></i> Exportar backup JSON</div>
+      <div style="font-size:12px;color:var(--text-light);margin-bottom:8px">Descarga un archivo <code>.json</code> con todos los registros, máquinas y usuarios. Úsalo para restaurar o migrar datos.</div>
+      <button class="btn btn-sm btn-primary" onclick="exportarBackupJSON()"><i class="ti ti-download"></i> Descargar backup</button>
+    </div>
+
+    <div style="border:1px solid var(--border);border-radius:var(--r);padding:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px"><i class="ti ti-upload" style="font-size:13px"></i> Importar backup JSON</div>
+      <div style="font-size:12px;color:var(--text-light);margin-bottom:8px">Restaura datos desde un archivo <code>.json</code> exportado previamente. Los registros existentes se actualizan; los nuevos se agregan.</div>
+      <button class="btn btn-sm" onclick="importarBackupJSON()"><i class="ti ti-upload"></i> Seleccionar archivo</button>
+    </div>
+
+    <div style="border:1px solid var(--border);border-radius:var(--r);padding:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--warn)"><i class="ti ti-eraser" style="font-size:13px"></i> Limpiar base de datos</div>
+      <div style="font-size:12px;color:var(--text-light);margin-bottom:8px">Elimina <strong>todos</strong> los registros y máquinas. Los usuarios (logins) se conservan. Esta acción no se puede deshacer.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-sm" style="border-color:var(--warn);color:var(--warn)" onclick="limpiarDB(false)"><i class="ti ti-trash"></i> Solo limpiar</button>
+        <button class="btn btn-sm" style="border-color:var(--ok);color:var(--ok)" onclick="limpiarDB(true)"><i class="ti ti-refresh"></i> Limpiar y cargar datos demo</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>`;
+}
+
+function exportarBackupJSON(){
+  window.location.href='/api/exportar/backup';
+}
+
+async function importarBackupJSON(){
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async e => {
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      try{
+        const data = JSON.parse(ev.target.result);
+        if(!data.maquinas || !data.registros) throw new Error('Formato inválido');
+        showToast('Importando...');
+        closeModal();
+        await api.post('/importar/backup', data);
+        await initDB();
+        go(VIEW);
+        showToast('Backup importado correctamente');
+      }catch(err){ showToast('Error al importar: '+err.message, true); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+async function limpiarDB(reseed){
+  const msg = reseed
+    ? '¿Limpiar toda la base de datos y cargar los datos de demostración?'
+    : '¿Eliminar TODOS los registros y máquinas? Esta acción no se puede deshacer.';
+  if(!confirm(msg)) return;
+  try{
+    closeModal();
+    showToast(reseed ? 'Restaurando datos demo...' : 'Limpiando base de datos...');
+    await api.post('/db/reset', {reseed});
+    await initDB();
+    go('dashboard');
+    showToast(reseed ? 'Datos demo restaurados' : 'Base de datos limpiada');
+  }catch(e){ showToast('Error: '+e.message, true); }
+}
+
+// Toast de confirmación
+function showToast(msg, isError=false){
+  let t = document.getElementById('toast');
+  if(!t){
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;bottom:20px;right:20px;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;z-index:9999;transition:opacity .3s;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = (isError ? '✗ ' : '✓ ') + msg;
+  t.style.background = isError ? 'var(--danger)' : 'var(--ok)';
+  t.style.color = '#fff';
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>{ t.style.opacity='0'; }, 2000);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BASE DE DATOS — caché local (poblada desde la API al iniciar)
+// ══════════════════════════════════════════════════════════════════════════════
+const DB_DEFAULTS_UNUSED = {
+  maquinas: [
+    {id:'MAQ01',nombre:'Maquina No. 1',serial:'250619003',estado:'Operativa',ubicacion:'Consulta',paciente_actual:null,notas:''},
+    {id:'MAQ02',nombre:'Maquina No. 2',serial:'250619002',estado:'Operativa',ubicacion:'Consulta',paciente_actual:null,notas:''},
+    {id:'MAQ03',nombre:'Maquina No. 3',serial:'250904014',estado:'Operativa',ubicacion:'Domicilio',paciente_actual:null,notas:''},
+    {id:'MAQ04',nombre:'Maquina No. 4',serial:'250317003',estado:'Operativa',ubicacion:'Domicilio',paciente_actual:null,notas:''},
+    {id:'MAQ05',nombre:'Maquina No. 5',serial:'240411004',estado:'Requiere Revisión',ubicacion:'Consulta',paciente_actual:null,notas:'Revisar estado'},
+    {id:'MAQ06',nombre:'Maquina No. 6',serial:'250317004',estado:'Operativa',ubicacion:'Consulta',paciente_actual:null,notas:''},
+    {id:'MAQ07',nombre:'Maquina No. 7',serial:'',estado:'Sin registrar',ubicacion:'',paciente_actual:null,notas:'Sin serial'},
+    {id:'MAQ08',nombre:'Maquina No. 8',serial:'',estado:'Sin registrar',ubicacion:'',paciente_actual:null,notas:'Sin serial'},
+  ],
+
+  // Registro histórico completo (cada fila = una colocación)
+  registros: [
+    {id:'R001',fecha:'2026-05-05',nombre:'Sebastian Adolfo Gomez F.',cedula:'001-0553575-1',sexo:'M',edad:83,lesion:'Pierna Derecha',direccion:'Hospital de la Policia',tel1:'829-702-2598 (Kelvin Adolfo)',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'2da Colocacion',facturacion:0},
+    {id:'R002',fecha:'2026-05-01',nombre:'Dr. Felix Batista',cedula:'',sexo:'',edad:null,lesion:'Pecho',direccion:'Azilo Haina',tel1:'829-907-1783',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'',facturacion:13000},
+    {id:'R003',fecha:'2026-05-03',nombre:'Sobeida Mora',cedula:'024-0014327-3',sexo:'F',edad:null,lesion:'Pierna Izquierda',direccion:'(Los Llanos San Pedro)',tel1:'829-469-2280',tel2:'',dr_refiere:'Juan Vicente Mendez',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'2da Colocacion',facturacion:16000},
+    {id:'R004',fecha:'2026-05-05',nombre:'Jose Adames',cedula:'',sexo:'',edad:80,lesion:'Pie Izquierdo',direccion:'Bella Vista',tel1:'809-330-5529',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'2da colocacion de 5',facturacion:0},
+    {id:'R005',fecha:'2026-05-02',nombre:'Zunilda Cesar Hilson',cedula:'001-0003343-0',sexo:'F',edad:null,lesion:'Pierna Izquierda',direccion:'Ecologica',tel1:'809-268-8181',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'',facturacion:13000},
+    {id:'R006',fecha:'2026-05-02',nombre:'Arturo Hernandez',cedula:'',sexo:'',edad:null,lesion:'Zacra',direccion:'Pct Oncologo',tel1:'',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'retirado el viernes 8 de mayo',facturacion:13000},
+    {id:'R007',fecha:'2026-05-06',nombre:'Mercedes Rosario',cedula:'001-0485475-7',sexo:'F',edad:59,lesion:'Nalgas',direccion:'Hainamosa',tel1:'849-624-7905 (Marcos)',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'',facturacion:13500},
+    {id:'R008',fecha:'2026-05-08',nombre:'Zunilda Cesar Hilson',cedula:'001-0003343-0',sexo:'F',edad:null,lesion:'Pierna Izquierda',direccion:'Ecologica',tel1:'809-268-8181',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'',facturacion:13000},
+    {id:'R009',fecha:'2026-05-09',nombre:'Dr. Felix Batista',cedula:'',sexo:'',edad:null,lesion:'Pecho',direccion:'Azilo Haina',tel1:'829-907-1783',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'',facturacion:13000},
+    {id:'R010',fecha:'2026-05-10',nombre:'Sobeida Mora',cedula:'024-0014327-3',sexo:'F',edad:null,lesion:'Pierna Izquierda',direccion:'(Los Llanos San Pedro)',tel1:'829-469-2280',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'3era colocacion',facturacion:16000},
+    {id:'R011',fecha:'2026-05-12',nombre:'Jose Adames',cedula:'',sexo:'',edad:80,lesion:'Pie Izquierdo',direccion:'Bella Vista',tel1:'809-330-5529',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'3era colocacion de 5',facturacion:3000},
+    {id:'R012',fecha:'2026-05-12',nombre:'Sebastian Adolfo Gomez F.',cedula:'001-0553575-1',sexo:'M',edad:83,lesion:'Pierna Derecha',direccion:'Hospital de la Policia',tel1:'829-702-2598 (Kelvin Adolfo)',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'3era Colocacion de 5 (PCT Murio 14 may)',facturacion:0},
+    {id:'R013',fecha:'2026-05-14',nombre:'Mercedes Rosario',cedula:'001-0485475-7',sexo:'F',edad:59,lesion:'Nalgas',direccion:'Hainamosa',tel1:'849-624-7905 (Marcos)',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'retirado el viernes 22 de mayo',facturacion:13000},
+    {id:'R014',fecha:'2026-05-13',nombre:'Ramon Emilio Campusano',cedula:'001-0676784-1',sexo:'',edad:73,lesion:'Zacra, las 2 caderas',direccion:'Manoguayabo',tel1:'809-304-5187 (Marcos Campusano)',tel2:'809-217-9714 (Victor Campusano)',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'1era Colocacion de 5 (Resta RD$35,000.00)',facturacion:40000},
+    {id:'R015',fecha:'2026-05-15',nombre:'Dr. Felix Batista',cedula:'',sexo:'',edad:null,lesion:'Pecho',direccion:'Azilo Haina',tel1:'829-907-1783',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'',facturacion:13000},
+    {id:'R016',fecha:'2026-05-16',nombre:'Sobeida Mora',cedula:'024-0014327-3',sexo:'F',edad:null,lesion:'Pierna Izquierda',direccion:'(Los Llanos San Pedro)',tel1:'829-469-2280',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'4ta Colocacion',facturacion:16000},
+    {id:'R017',fecha:'2026-05-18',nombre:'Faustino Rosario',cedula:'059-0001895-2',sexo:'F',edad:70,lesion:'Pecho',direccion:'Nagua (Mac Center)',tel1:'809-946-0510 (Angelita Pichardo)',tel2:'849-403-78210 (Paulina)',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'1era Colocacion',facturacion:13000},
+    {id:'R018',fecha:'2026-05-19',nombre:'Jose Adames',cedula:'',sexo:'',edad:80,lesion:'Pie Izquierdo',direccion:'Bella Vista',tel1:'809-330-5529',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'4ta de 5 Colocaciones',facturacion:0},
+    {id:'R019',fecha:'2026-05-21',nombre:'Ramon Emilio Campusano',cedula:'001-0676784-1',sexo:'',edad:73,lesion:'Zacra, las 2 caderas',direccion:'Manoguayabo',tel1:'809-304-5187 (Marcos Campusano)',tel2:'809-217-9714 (Victor Campusano)',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'2da de 5 Colocaciones',facturacion:0},
+    {id:'R020',fecha:'2026-05-21',nombre:'Julia Ozuna Rodriguez',cedula:'001-0449791-2',sexo:'',edad:72,lesion:'Zacra',direccion:'Res. Maximo Gomez',tel1:'',tel2:'809-568-1314',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'',facturacion:13000},
+    {id:'R021',fecha:'2026-05-22',nombre:'Dr. Felix Batista',cedula:'',sexo:'',edad:null,lesion:'Pecho',direccion:'Azilo Haina',tel1:'829-907-1783',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'',facturacion:13000},
+    {id:'R022',fecha:'2026-05-23',nombre:'Julio Mendez Mendez',cedula:'070-0004347-6',sexo:'',edad:67,lesion:'',direccion:'Barahona',tel1:'829-478-0597 (Miriam)',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'',facturacion:22000},
+    {id:'R023',fecha:'2026-05-23',nombre:'Sobeida Mora',cedula:'024-0014327-3',sexo:'F',edad:null,lesion:'Pierna Izquierda',direccion:'(Los Llanos San Pedro)',tel1:'829-469-2280',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'Retirado el Sabado 30 (Decision Medica)',facturacion:0},
+    {id:'R024',fecha:'2026-05-25',nombre:'Armenio Gomez',cedula:'022-0002732-0',sexo:'',edad:60,lesion:'Pierna derecha',direccion:'Neiba (Moscoso Puello)',tel1:'829-868-4395 (Lisset)',tel2:'809-663-6823 (Candido)',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'',facturacion:12000},
+    {id:'R025',fecha:'2026-05-25',nombre:'Elias German Mago Quezada',cedula:'001-6429938-3',sexo:'M',edad:62,lesion:'Pierna',direccion:'San Luis (Ney Arias)',tel1:'39 379 159 4946',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'1era Colocacion',facturacion:13000},
+    {id:'R026',fecha:'2026-05-25',nombre:'Faustino Rosario',cedula:'059-0001895-2',sexo:'F',edad:70,lesion:'Pecho',direccion:'Nagua (Mac Center)',tel1:'809-946-0510 (Angelita Pichardo)',tel2:'849-403-78210 (Paulina)',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'2da Colocacion',facturacion:13000},
+    {id:'R027',fecha:'2026-05-27',nombre:'Jose Adames',cedula:'',sexo:'',edad:80,lesion:'Pie Izquierdo',direccion:'Bella Vista',tel1:'809-330-5529',tel2:'',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'5ta Colocacion (Retirada el 2 de Juniors)',facturacion:0},
+    {id:'R028',fecha:'2026-05-27',nombre:'Ramon Emilio Campusano',cedula:'001-0676784-1',sexo:'',edad:73,lesion:'Zacra, las 2 caderas',direccion:'Manoguayabo',tel1:'809-304-5187 (Marcos Campusano)',tel2:'809-217-9714 (Victor Campusano)',dr_refiere:'',ars:'Privado',maquina:'',estatus:'Desactivado',motivo:'3era Colocacion',facturacion:0},
+    // ACTIVOS (4 activos reales del Excel)
+    {id:'R029',fecha:'2026-05-29',nombre:'Dr. Felix Batista',cedula:'',sexo:'',edad:null,lesion:'Pecho',direccion:'Azilo Haina',tel1:'829-907-1783',tel2:'',dr_refiere:'',ars:'Privado',maquina:'MAQ01',estatus:'Activo',motivo:'',facturacion:13000},
+    {id:'R030',fecha:'2026-05-30',nombre:'Santo Tejeda',cedula:'003-0065067-8',sexo:'',edad:52,lesion:'Pierna derecha',direccion:'Bani',tel1:'829-380-1747 (Orquidea)',tel2:'829-788-2378 (Robert)',dr_refiere:'',ars:'Privado',maquina:'MAQ04',estatus:'Activo',motivo:'1era Colocacion',facturacion:13000},
+    {id:'R031',fecha:'2026-05-30',nombre:'Julio Mendez Mendez',cedula:'070-0004347-6',sexo:'',edad:67,lesion:'',direccion:'Barahona',tel1:'829-478-0597 (Miriam)',tel2:'',dr_refiere:'',ars:'Privado',maquina:'MAQ03',estatus:'Activo',motivo:'2da Colocacacion',facturacion:22000},
+    {id:'R032',fecha:'2026-05-30',nombre:'Julia Ozuna Rodriguez',cedula:'001-0449791-2',sexo:'',edad:72,lesion:'Zacra',direccion:'Res. Maximo Gomez',tel1:'',tel2:'809-568-1314',dr_refiere:'',ars:'Privado',maquina:'MAQ02',estatus:'Activo',motivo:'2da Colocacion',facturacion:13000},
+  ]
+};
+
+const DB_USUARIOS_DEFAULT = [
+  {id:'U001',user:'admin',pass:'medic2026',nombre:'Administrador',rol:'admin',activo:true},
+  {id:'U002',user:'dr1',pass:'doctor123',nombre:'Dr. Médico',rol:'usuario',activo:true},
+];
+
+// Local cache — populated from API on startup
+const DB = {maquinas:[],registros:[],pacientes_master:{},usuarios:[],ars:[]};
+
+function arsOpts(selected=''){
+  return DB.ars.map(a=>`<option${a===selected?' selected':''}>${a}</option>`).join('');
+}
+
+const ARS_PUBLICAS = ['Senasa Subsidiado','Senasa Contributivo','Semma'];
+function arsOptsGrouped(selected=''){
+  const publicas = ARS_PUBLICAS.filter(a=>DB.ars.includes(a));
+  const privadas = DB.ars.filter(a=>!ARS_PUBLICAS.includes(a)&&a!=='Privado (Sin ARS)');
+  const sel = v=>v===selected?' selected':'';
+  return `<option value="">— Seleccionar ARS —</option>
+    <optgroup label="🏛️ ARS Pública">
+      ${publicas.map(a=>`<option${sel(a)}>${a}</option>`).join('')}
+    </optgroup>
+    <optgroup label="🏢 ARS Privada">
+      ${privadas.map(a=>`<option${sel(a)}>${a}</option>`).join('')}
+    </optgroup>
+    <optgroup label="Sin seguro">
+      <option${sel('Privado (Sin ARS)')}>Privado (Sin ARS)</option>
+    </optgroup>`;
+}
+
+function onPacChange(){
+  const nombre=(document.getElementById('col-pac')||{}).value;
+  if(!nombre||nombre==='__nuevo__') return;
+  const p=getPacientesUnicos().find(x=>x.nombre===nombre);
+  if(!p) return;
+  const arsEl=document.getElementById('col-ars');
+  if(arsEl&&p.ars) arsEl.value=p.ars;
+  const numEl=document.getElementById('col-num');
+  if(numEl){
+    const total=p.colocaciones.length;
+    if(total>0){
+      const etiquetas=['1era','2da','3era','4ta','5ta','6ta','7ma','8va','9na','10ma'];
+      numEl.value=(etiquetas[total]||`${total+1}ra`)+' Colocacion';
+      numEl.readOnly=true;
+      numEl.style.background='var(--bg2)';
+      numEl.title='Se calcula automáticamente según el historial del paciente';
+    }else{
+      numEl.readOnly=false;
+      numEl.style.background='';
+    }
+  }
+}
+
+async function abrirGestionARS(returnSelectId){
+  const modalRoot=document.getElementById('modal-root');
+  const renderLista=()=>{
+    return DB.ars.map((a,i)=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border)">
+        <span style="flex:1;font-size:13px">${a}</span>
+        <button class="btn btn-sm btn-ghost" style="color:var(--danger);padding:2px 6px" onclick="eliminarARS(${i},'${returnSelectId}')" title="Eliminar">
+          <i class="ti ti-trash" style="font-size:12px"></i>
+        </button>
+      </div>`).join('');
+  };
+  window._arsReturnId=returnSelectId;
+  window._arsRenderModal=()=>{
+    document.getElementById('ars-lista').innerHTML=renderLista();
+    // Keep current selection if still valid
+    const sel=document.getElementById(returnSelectId);
+    if(sel){const cur=sel.value;sel.innerHTML=arsOpts(cur);}
+  };
+  modalRoot.innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal" style="max-width:380px">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title"><i class="ti ti-shield-heart"></i> Gestionar ARS / Seguros</div>
+  <div id="ars-lista" style="margin-bottom:12px">${renderLista()}</div>
+  <div style="display:flex;gap:8px">
+    <input type="text" id="ars-nueva" placeholder="Nueva ARS o seguro…" style="flex:1"
+      onkeydown="if(event.key==='Enter')agregarARS('${returnSelectId}')">
+    <button class="btn btn-primary btn-sm" onclick="agregarARS('${returnSelectId}')">
+      <i class="ti ti-plus"></i> Agregar
+    </button>
+  </div>
+</div>
+</div>`;
+}
+
+async function agregarARS(returnSelectId){
+  const input=document.getElementById('ars-nueva');
+  const nombre=(input?.value||'').trim();
+  if(!nombre) return;
+  if(DB.ars.includes(nombre)){showToast('Ya existe en la lista',true);return;}
+  DB.ars.push(nombre);
+  await api.put('/config/ars',DB.ars);
+  input.value='';
+  window._arsRenderModal?.();
+  showToast('ARS agregada');
+}
+
+async function eliminarARS(idx,returnSelectId){
+  const nombre=DB.ars[idx];
+  if(!confirm(`¿Eliminar "${nombre}" de la lista?`)) return;
+  DB.ars.splice(idx,1);
+  await api.put('/config/ars',DB.ars);
+  window._arsRenderModal?.();
+  showToast('ARS eliminada');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+const fmt=v=>new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP',minimumFractionDigits:0}).format(v);
+const fmtD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('es-DO',{day:'2-digit',month:'short',year:'numeric'}):'—';
+const initials=n=>n.split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');
+function stBadge(s){
+  const m={'Activo':'ok','Desactivado':'gray','Operativa':'ok','Requiere Revisión':'warn','Sin registrar':'danger','Fuera de Servicio':'danger','Activa con paciente':'ok'};
+  return`<span class="badge badge-${m[s]||'gray'}">${s}</span>`;
+}
+function condBadge(s){
+  const m={'Óptima':'ok','Buena':'ok','Con daños leves':'warn','Requiere revisión':'warn','Dañado':'danger','Requiere Revisión':'warn'};
+  return`<span class="badge badge-${m[s]||'gray'}" style="font-size:10px">${s}</span>`;
+}
+// Pacientes únicos (deduplicados por nombre)
+function getPacientesUnicos(){
+  const map={};
+  DB.registros.forEach(r=>{
+    if(!r.nombre) return;
+    if(!map[r.nombre]){
+      map[r.nombre]={...r, colocaciones:[], total_facturado:0};
+    }
+    map[r.nombre].colocaciones.push(r);
+    map[r.nombre].total_facturado+=(r.facturacion||0);
+    if(r.estatus==='Activo') map[r.nombre].estatus='Activo';
+    // Actualiza datos con la entrada más reciente
+    if(r.fecha > map[r.nombre].fecha){
+      map[r.nombre].maquina=r.maquina;
+      map[r.nombre].motivo=r.motivo;
+    }
+  });
+  // Aplicar ediciones del perfil maestro
+  Object.keys(map).forEach(nombre=>{
+    if(DB.pacientes_master[nombre]){
+      Object.assign(map[nombre], DB.pacientes_master[nombre]);
+    }
+  });
+  return Object.values(map);
+}
+function getMaquinaLabel(id){
+  const m=DB.maquinas.find(x=>x.id===id);
+  return m?m.nombre:'—';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ROUTER
+// ══════════════════════════════════════════════════════════════════════════════
+let VIEW='dashboard';
+const TITLES={dashboard:'Dashboard',pacientes:'Pacientes (Clientes)',colocaciones:'Colocaciones',mapa:'Mapa GPS',registro:'Registro Completo',maquinas:'Inventario de Máquinas',facturacion:'Conduces de Descargo',usuarios:'Gestión de Usuarios'};
+const NUEVO_LABELS={dashboard:'Nueva Colocación',pacientes:'Nuevo Paciente',colocaciones:'Nueva Colocación',mapa:'Nueva Colocación',registro:'Nueva Colocación',maquinas:'Nueva Máquina',facturacion:'Nueva colocación',usuarios:'Nuevo Usuario'};
+
+function go(v){
+  VIEW=v;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const ni=document.getElementById('nav-'+v);if(ni)ni.classList.add('active');
+  document.getElementById('view-title').textContent=TITLES[v]||v;
+  document.getElementById('btn-nuevo-label').textContent=NUEVO_LABELS[v]||'Nuevo';
+  document.getElementById('btn-import').style.display=(v==='registro'||v==='pacientes')?'':'none';
+  closeModal();
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,mapa:renderMapa,registro:renderRegistro,maquinas:renderMaquinas,facturacion:renderFacturacion,usuarios:renderUsuarios})[v]?.();
+}
+function handleNuevo(){
+  ({dashboard:()=>abrirColocacion(null),pacientes:()=>abrirNuevoPaciente(),colocaciones:()=>abrirColocacion(null),mapa:()=>abrirColocacion(null),registro:()=>abrirColocacion(null),maquinas:()=>abrirNuevaMaquina(),facturacion:()=>abrirColocacion(null),usuarios:()=>abrirNuevoUsuario()})[VIEW]?.();
+}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed')}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════════════════════════
+function renderDash(){
+  const activos=DB.registros.filter(r=>r.estatus==='Activo');
+  const pacUnicos=getPacientesUnicos();
+  const maqOk=DB.maquinas.filter(m=>m.estado==='Operativa').length;
+  const maqConPac=DB.maquinas.filter(m=>m.paciente_actual).length;
+  const totalFact=DB.registros.reduce((s,r)=>s+(r.facturacion||0),0);
+  const factMes=DB.registros.filter(r=>r.fecha>='2026-05-01').reduce((s,r)=>s+(r.facturacion||0),0);
+
+  document.getElementById('content').innerHTML=`
+<div class="metrics">
+  <div class="metric"><div class="metric-label">Pacientes únicos</div><div class="metric-val">${pacUnicos.length}</div><div class="metric-sub">en el sistema</div></div>
+  <div class="metric"><div class="metric-label">Activos ahora</div><div class="metric-val ok">${activos.length}</div><div class="metric-sub">con máquina asignada</div></div>
+  <div class="metric"><div class="metric-label">Máquinas operativas</div><div class="metric-val ok">${maqOk}/8</div><div class="metric-sub">${maqConPac} en uso actualmente</div></div>
+  <div class="metric"><div class="metric-label">Condu. Descargo mayo</div><div class="metric-val" style="font-size:16px">${fmt(factMes)}</div><div class="metric-sub">Total acumulado: ${fmt(totalFact)}</div></div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+  <div class="card">
+    <div class="card-title"><i class="ti ti-activity" style="font-size:13px;vertical-align:-1px;margin-right:5px"></i>Pacientes activos ahora</div>
+    ${activos.map(r=>{const m=DB.maquinas.find(x=>x.id===r.maquina);
+      const hoy7=new Date(Date.now()+7*86400000).toISOString().split('T')[0];
+      const proxAlerta=r.proxima_colocacion&&r.proxima_colocacion<=hoy7;
+      return`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="verPacienteDetalle('${r.nombre}')">
+      <div class="avatar">${initials(r.nombre)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nombre}</div>
+        <div style="font-size:11px;color:var(--text2)">${r.lesion||'Sin área especificada'} · ${r.motivo||'—'} ${(()=>{const maps=(DB.pacientes_master[r.nombre]||{}).ubicacion_maps;return maps?renderMapsLink(maps):''})()}</div>
+        ${proxAlerta?`<div style="font-size:10px;color:var(--warn-t);margin-top:2px">⏰ Próxima visita: ${fmtD(r.proxima_colocacion)}</div>`:''}
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        ${m?`<span class="badge badge-brand">${m.nombre}</span>`:''}
+        ${proxAlerta?`<span class="badge badge-warn" style="font-size:10px;margin-top:3px;display:block">Pronto</span>`:''}
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtD(r.fecha)}</div>
+      </div>
+    </div>`}).join('')}
+    <div style="padding-top:10px"><button class="btn btn-sm" onclick="go('colocaciones')">Ver todas las colocaciones</button></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><i class="ti ti-device-laptop-medical" style="font-size:13px;vertical-align:-1px;margin-right:5px"></i>Estado de máquinas</div>
+    <div class="maq-grid">
+      ${DB.maquinas.map(m=>`
+      <div class="maq-card ${m.paciente_actual?'activa':''}" onclick="go('maquinas')" title="${m.nombre}">
+        <div style="font-size:11px;font-weight:700;color:var(--text2)">No. ${m.num||m.id.replace('MAQ','')}</div>
+        <div style="font-size:12px;font-weight:600;margin:3px 0;color:var(--text)">${m.serial||'Sin serial'}</div>
+        ${m.paciente_actual
+          ?`<div style="font-size:10px;color:var(--ok-t);font-weight:600">⬤ ${m.paciente_actual.split(' ')[0]} ${m.paciente_actual.split(' ')[1]||''}</div>`
+          :`<div style="font-size:10px;color:var(--text3)">${m.estado}</div>`}
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:12px;font-size:12px;color:var(--text2)">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--ok-bg);border:1px solid var(--ok);display:inline-block"></span>Con paciente</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--bg2);border:1px solid var(--border2);display:inline-block"></span>Disponible</span>
+    </div>
+  </div>
+
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <div class="card">
+    <div class="card-title"><i class="ti ti-clock" style="font-size:13px;vertical-align:-1px;margin-right:5px"></i>Últimas colocaciones</div>
+    ${DB.registros.slice(-6).reverse().map(r=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nombre||'—'}</div>
+        <div style="font-size:11px;color:var(--text2)">${r.motivo||'Colocación'} · ${r.lesion||'—'}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        ${stBadge(r.estatus)}
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtD(r.fecha)}</div>
+      </div>
+    </div>`).join('')}
+  </div>
+  <div class="card">
+    <div class="card-title"><i class="ti ti-chart-bar" style="font-size:13px;vertical-align:-1px;margin-right:5px"></i>Resumen Conduces de Descargo mayo 2026</div>
+    ${[...new Set(DB.registros.filter(r=>r.facturacion>0).map(r=>r.nombre))].map(n=>{
+      const total=DB.registros.filter(r=>r.nombre===n).reduce((s,r)=>s+(r.facturacion||0),0);
+      const max=Math.max(...getPacientesUnicos().map(p=>p.total_facturado));
+      return`<div style="margin-bottom:9px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">${n}</span>
+          <span style="font-weight:600;flex-shrink:0;margin-left:8px">${fmt(total)}</span>
+        </div>
+        <div class="progress"><div class="progress-bar" style="width:${Math.round(total/max*100)}%;background:var(--brand)"></div></div>
+      </div>`;
+    }).join('')}
+  </div>
+</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PACIENTES (lista de clientes únicos)
+// ══════════════════════════════════════════════════════════════════════════════
+function renderPacientes(){
+  const pacs=getPacientesUnicos();
+  document.getElementById('content').innerHTML=`
+<div class="tbl-wrap">
+  <div class="search-bar">
+    <input type="text" placeholder="Buscar por nombre, cédula, teléfono..." id="srch-pac" oninput="filterPacientes()">
+    <select id="fil-est-pac" onchange="filterPacientes()">
+      <option value="">Todos los estados</option>
+      <option>Activo</option><option>Desactivado</option>
+    </select>
+  </div>
+  <table class="tbl">
+    <thead><tr><th>Paciente</th><th>Cédula</th><th>Área de lesión</th><th>Teléfono</th><th>ARS</th><th>Colocaciones</th><th>Estatus</th><th>Total conduces</th><th></th></tr></thead>
+    <tbody id="tbody-pac"></tbody>
+  </table>
+</div>`;
+  filterPacientes();
+}
+function filterPacientes(){
+  const q=(document.getElementById('srch-pac')||{}).value?.toLowerCase()||'';
+  const est=(document.getElementById('fil-est-pac')||{}).value||'';
+  const pacs=getPacientesUnicos().filter(p=>
+    (!q||[p.nombre,p.cedula,p.tel1,p.tel2,p.direccion].some(x=>x&&x.toLowerCase().includes(q)))&&
+    (!est||p.estatus===est)
+  ).sort((a,b)=>(a.estatus==='Activo'?0:1)-(b.estatus==='Activo'?0:1));
+  const tb=document.getElementById('tbody-pac');if(!tb)return;
+  tb.innerHTML=pacs.length?pacs.map(p=>`
+  <tr onclick="verPacienteDetalle('${p.nombre.replace(/'/g,"\\'")}')">
+    <td>
+      <div style="display:flex;align-items:center;gap:9px">
+        <div class="avatar" style="width:30px;height:30px;font-size:11px">${initials(p.nombre)}</div>
+        <div><div style="font-weight:600">${p.nombre}</div><div style="font-size:11px;color:var(--text2)">${p.edad?p.edad+' años':''} ${p.sexo?'· '+p.sexo:''}</div></div>
+      </div>
+    </td>
+    <td style="font-family:monospace;font-size:12px">${p.cedula||'—'}</td>
+    <td style="font-size:12px">${p.lesion||'—'}</td>
+    <td style="font-size:12px">${p.tel1||p.tel2||'—'}</td>
+    <td><span class="badge badge-gray">${p.ars||'—'}</span></td>
+    <td style="text-align:center"><span class="badge badge-info">${p.colocaciones.length}</span></td>
+    <td>${stBadge(p.estatus)}</td>
+    <td style="font-weight:600">${fmt(p.total_facturado)}</td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();verPacienteDetalle('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-eye"></i></button>
+      <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();editarPaciente('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-pencil"></i></button>
+      <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();abrirAsignarEquipo('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-device-laptop-medical"></i></button>
+      <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();confirmarEliminarPaciente('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i></button>
+    </td>
+  </tr>`).join(''):`<tr><td colspan="9"><div class="empty-state"><i class="ti ti-user-off"></i>No se encontraron pacientes</div></td></tr>`;
+}
+
+function verPacienteDetalle(nombre){
+  const pacs=getPacientesUnicos();
+  const p=pacs.find(x=>x.nombre===nombre);if(!p)return;
+  const colocaciones=p.colocaciones.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const maqActual=p.estatus==='Activo'?DB.maquinas.find(m=>m.id===p.maquina):null;
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal modal-lg">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div style="display:flex;align-items:start;gap:14px;margin-bottom:20px">
+    <div class="avatar" style="width:48px;height:48px;font-size:16px">${initials(p.nombre)}</div>
+    <div style="flex:1">
+      <div style="font-size:18px;font-weight:700;margin-bottom:3px">${p.nombre}</div>
+      <div style="font-size:13px;color:var(--text2);display:flex;gap:10px;flex-wrap:wrap">
+        ${p.cedula?`<span>🪪 ${p.cedula}</span>`:''}
+        ${p.edad?`<span>Edad: ${p.edad}</span>`:''}
+        ${p.sexo?`<span>Sexo: ${p.sexo}</span>`:''}
+        ${p.tel1?`<span>📞 ${p.tel1}</span>`:''}
+        ${(()=>{const maps=(DB.pacientes_master[p.nombre]||{}).ubicacion_maps;return maps?renderMapsLink(maps):''})()}
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        ${stBadge(p.estatus)}
+        ${maqActual?`<span class="conn-badge"><i class="ti ti-device-laptop-medical"></i>${maqActual.nombre} asignada</span>`:''}
+        <span class="badge badge-info">${colocaciones.length} colocación${colocaciones.length!==1?'es':''}</span>
+        <span class="badge badge-brand">Total: ${fmt(p.total_facturado)}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'tpd-info')">Datos</div>
+    <div class="tab" onclick="switchTab(this,'tpd-hist')">Historial colocaciones</div>
+  </div>
+
+  <div id="tpd-info">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Datos personales</div>
+        ${[['Área de lesión',p.lesion||'—'],['Dirección / centro',p.direccion||'—'],['Teléfono 1',p.tel1||'—'],['Teléfono 2',p.tel2||'—'],['ARS / Seguro',p.ars||'—'],['Dr. que refiere',p.dr_refiere||'—']].map(([l,v])=>`
+        <div class="info-row"><span class="info-label">${l}</span><span class="info-val">${v}</span></div>`).join('')}
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Última colocación</div>
+        ${(()=>{
+          const ultR=p.colocaciones.slice().sort((a,b)=>b.fecha.localeCompare(a.fecha))[0]||p;
+          const prox=ultR.proxima_colocacion;
+          const hoy=new Date().toISOString().split('T')[0];
+          const proxAlerta=prox&&prox<=new Date(Date.now()+7*86400000).toISOString().split('T')[0];
+          const proxVal=prox?`${fmtD(prox)}${proxAlerta?` <span class="badge badge-warn" style="font-size:10px">Próxima</span>`:''}`:'—';
+          return [['Fecha',fmtD(p.fecha)],['Colocación',p.motivo||'—'],['Máquina asignada',getMaquinaLabel(p.maquina)],['Estado',p.estatus],['Próxima visita',proxVal],['Conduce',fmt(p.facturacion||0)],['Total acumulado',fmt(p.total_facturado)]].map(([l,v])=>`
+        <div class="info-row"><span class="info-label">${l}</span><span class="info-val">${v}</span></div>`).join('');
+        })()}
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="closeModal();abrirAsignarEquipo('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-device-laptop-medical"></i>Asignar equipo</button>
+          <button class="btn btn-sm" onclick="closeModal();editarPaciente('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-pencil"></i>Editar perfil</button>
+          ${p.estatus==='Activo'?`<button class="btn btn-danger btn-sm" onclick="desactivarPaciente('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-player-stop"></i>Retirar equipo</button>`:`<button class="btn btn-ok btn-sm" onclick="closeModal();abrirAsignarEquipo('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-player-play"></i>Nueva colocación</button>`}
+          <button class="btn btn-danger btn-sm" onclick="confirmarEliminarPaciente('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i>Eliminar paciente</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tpd-hist" style="display:none">
+    <table class="tbl">
+      <thead><tr><th>Fecha entrega</th><th>Colocación</th><th>Máquina</th><th>Modo</th><th>Cond. salida</th><th>Fecha retiro</th><th>Cond. retorno</th><th>Estado</th><th>Conduce</th><th></th></tr></thead>
+      <tbody>
+        ${colocaciones.map(c=>`
+        <tr>
+          <td style="font-size:12px;white-space:nowrap">${fmtD(c.fecha)}</td>
+          <td>${c.motivo||'—'}${c.notas?` <span title="${c.notas.replace(/"/g,'&quot;')}" style="cursor:help">💬</span>`:''}</td>
+          <td>${getMaquinaLabel(c.maquina)||'—'}</td>
+          <td style="font-size:11px">${c.modo_uso||'—'}</td>
+          <td>${c.condicion_salida?condBadge(c.condicion_salida):'<span style="color:var(--text3)">—</span>'}</td>
+          <td style="font-size:12px;white-space:nowrap">${c.fecha_retiro?fmtD(c.fecha_retiro):'<span style="color:var(--ok-t);font-weight:600">En uso</span>'}</td>
+          <td>${c.condicion_retorno?condBadge(c.condicion_retorno):'<span style="color:var(--text3)">—</span>'}</td>
+          <td>${stBadge(c.estatus)}</td>
+          <td style="font-weight:600">${c.facturacion?fmt(c.facturacion):'—'}</td>
+          <td style="white-space:nowrap"><button class="btn btn-sm btn-ghost" title="Generar conduce" onclick="event.stopPropagation();generarConduce('${c.id}')"><i class="ti ti-printer"></i></button> <button class="btn btn-sm btn-danger" title="Eliminar" onclick="event.stopPropagation();eliminarColocacion('${c.id}')"><i class="ti ti-trash"></i></button></td>
+        </tr>
+        ${(c.notas||(c.productos&&c.productos.length)||(c.fotos&&c.fotos.length))?`<tr><td colspan="10" style="font-size:11px;color:var(--text2);padding:6px 13px 10px;background:var(--bg2)">${c.notas?`<div style="margin-bottom:4px">💬 ${c.notas}</div>`:''}${renderProductosEnHistorial(c.productos)}${renderGaleriaFotos(c.fotos)}</td></tr>`:''}`).join('')}
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COLOCACIONES
+// ══════════════════════════════════════════════════════════════════════════════
+function renderColocaciones(){
+  const activos=DB.registros.filter(r=>r.estatus==='Activo');
+  const total=DB.registros.length;
+  document.getElementById('content').innerHTML=`
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+  <div class="metric"><div class="metric-label">Total colocaciones</div><div class="metric-val">${total}</div></div>
+  <div class="metric"><div class="metric-label">En curso</div><div class="metric-val ok">${activos.length}</div><div class="metric-sub">con equipo asignado</div></div>
+  <div class="metric"><div class="metric-label">Finalizadas</div><div class="metric-val">${DB.registros.filter(r=>r.estatus==='Desactivado').length}</div></div>
+  <div class="metric"><div class="metric-label">Facturado total</div><div class="metric-val" style="font-size:15px">${fmt(DB.registros.reduce((s,r)=>s+(r.facturacion||0),0))}</div></div>
+</div>
+
+<div class="tbl-wrap">
+  <div class="search-bar">
+    <input type="text" placeholder="Buscar paciente, cédula, motivo..." id="srch-col" oninput="filterColocaciones()">
+    <select id="fil-est-col" onchange="filterColocaciones()">
+      <option value="">Todos los estados</option>
+      <option value="Activo">En curso</option>
+      <option value="Desactivado">Finalizadas</option>
+    </select>
+    <button class="btn btn-primary btn-sm" onclick="abrirColocacion(null)"><i class="ti ti-plus"></i>Nueva colocación</button>
+  </div>
+  <table class="tbl">
+    <thead><tr><th>Paciente</th><th>Máquina</th><th>Colocación</th><th>Fecha entrada</th><th>Fecha retiro</th><th>ARS</th><th>Conduce</th><th>Estado</th><th></th></tr></thead>
+    <tbody id="tbody-col"></tbody>
+  </table>
+</div>`;
+  filterColocaciones();
+}
+
+function filterColocaciones(){
+  const q=(document.getElementById('srch-col')||{}).value?.toLowerCase()||'';
+  const est=(document.getElementById('fil-est-col')||{}).value||'';
+  const rows=[...DB.registros].reverse().filter(r=>
+    (!q||[r.nombre,r.cedula,r.motivo,r.lesion].some(x=>x&&x.toLowerCase().includes(q)))&&
+    (!est||r.estatus===est)
+  );
+  const tb=document.getElementById('tbody-col');if(!tb)return;
+  tb.innerHTML=rows.map(r=>{
+    const m=DB.maquinas.find(x=>x.id===r.maquina);
+    return`<tr onclick="verPacienteDetalle('${r.nombre.replace(/'/g,"\\'")}')">
+      <td>
+        <div style="display:flex;align-items:center;gap:9px">
+          <div class="avatar" style="width:30px;height:30px;font-size:11px">${initials(r.nombre)}</div>
+          <div>
+            <div style="font-weight:600">${r.nombre}</div>
+            <div style="font-size:11px;color:var(--text2)">${r.lesion||''}</div>
+          </div>
+        </div>
+      </td>
+      <td>${m?`<span class="badge badge-brand">${m.nombre}</span>`:'<span class="badge badge-gray">Sin equipo</span>'}</td>
+      <td style="font-size:12px">${r.motivo||'—'}</td>
+      <td style="font-size:12px;white-space:nowrap">${fmtD(r.fecha)}</td>
+      <td style="font-size:12px;white-space:nowrap">${r.fecha_retiro?fmtD(r.fecha_retiro):'<span style="color:var(--ok-t);font-weight:600">En uso</span>'}</td>
+      <td><span class="badge badge-gray" style="font-size:10px">${r.ars||'—'}</span></td>
+      <td style="font-weight:600">${r.facturacion?fmt(r.facturacion):'—'}</td>
+      <td>${stBadge(r.estatus)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();verPacienteDetalle('${r.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-eye"></i></button>
+        <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();generarConduce('${r.id}')"><i class="ti ti-printer"></i></button>
+        ${r.estatus==='Activo'?`
+          <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();abrirCambiarEquipo('${r.id}')" title="${r.maquina?'Cambiar equipo':'Asignar equipo'}">
+            <i class="ti ti-${r.maquina?'arrows-exchange':'device-laptop-medical'}"></i>${r.maquina?'Cambiar':'Asignar'}
+          </button>
+          <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();desactivarPaciente('${r.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-player-stop"></i>Retirar</button>
+        `:''}
+      </td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="9"><div class="empty-state"><i class="ti ti-stack-2"></i>No hay colocaciones registradas</div></td></tr>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CAMBIAR / ASIGNAR EQUIPO EN COLOCACIÓN EXISTENTE
+// ══════════════════════════════════════════════════════════════════════════════
+function abrirCambiarEquipo(regId){
+  const reg=DB.registros.find(r=>r.id===regId);if(!reg)return;
+  const maqActual=DB.maquinas.find(m=>m.id===reg.maquina);
+  const disponibles=DB.maquinas.filter(m=>!m.paciente_actual&&m.estado==='Operativa');
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title"><i class="ti ti-arrows-exchange" style="color:var(--brand);margin-right:6px;vertical-align:-2px"></i>${maqActual?'Cambiar equipo':'Asignar equipo'} — ${reg.nombre}</div>
+  ${maqActual?`<div style="margin-bottom:12px;padding:10px 12px;background:var(--warn-bg);border-radius:var(--r);font-size:12px">
+    <span style="color:var(--warn-t);font-weight:600"><i class="ti ti-device-laptop-medical"></i> Equipo actual: ${maqActual.nombre}</span>
+    <span style="color:var(--text2);margin-left:8px">Serial: ${maqActual.serial||'—'}</span>
+  </div>`:''}
+  <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Equipos disponibles</div>
+  ${disponibles.length===0
+    ?`<div class="empty-state" style="padding:16px"><i class="ti ti-circle-x" style="font-size:24px"></i><br>Todas las máquinas operativas están en uso</div>`
+    :`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px" id="ceq-selector">
+      ${disponibles.map(m=>`
+      <div class="maq-card" id="csel-${m.id}" onclick="seleccionarCEq('${m.id}')" style="cursor:pointer">
+        <div style="font-size:10px;font-weight:700;color:var(--text3)">${m.id}</div>
+        <div style="font-weight:700;font-size:13px">${m.nombre}</div>
+        <div style="font-size:11px;color:var(--text2)">Serial: ${m.serial||'—'}</div>
+        <div style="font-size:11px;color:var(--text2)">${m.ubicacion||''}</div>
+      </div>`).join('')}
+    </div>`}
+  <input type="hidden" id="ceq-maqid" value="">
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-primary" style="flex:1" onclick="guardarCambiarEquipo('${regId}')"><i class="ti ti-device-floppy"></i>Confirmar cambio</button>
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+</div>`;
+}
+
+function seleccionarCEq(id){
+  document.querySelectorAll('#ceq-selector .maq-card').forEach(c=>{c.style.borderColor='';c.style.background='';});
+  const card=document.getElementById('csel-'+id);
+  if(card){card.style.borderColor='var(--brand)';card.style.background='var(--brand-dim)';}
+  document.getElementById('ceq-maqid').value=id;
+}
+
+async function guardarCambiarEquipo(regId){
+  const nuevaMaqId=document.getElementById('ceq-maqid').value;
+  if(!nuevaMaqId){alert('Selecciona un equipo.');return;}
+  const reg=DB.registros.find(r=>r.id===regId);if(!reg)return;
+  try{
+    // Liberar máquina anterior
+    if(reg.maquina){
+      const mOld=DB.maquinas.find(m=>m.id===reg.maquina);
+      if(mOld)mOld.paciente_actual=null;
+    }
+    await api.put('/registros/'+regId,{maquina:nuevaMaqId});
+    reg.maquina=nuevaMaqId;
+    const mNew=DB.maquinas.find(m=>m.id===nuevaMaqId);
+    if(mNew)mNew.paciente_actual=reg.nombre;
+    showToast('Equipo actualizado');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();
+  renderColocaciones();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// REGISTRO COMPLETO
+// ══════════════════════════════════════════════════════════════════════════════
+function renderRegistro(){
+  document.getElementById('content').innerHTML=`
+<div class="tbl-wrap">
+  <div class="search-bar">
+    <input type="text" placeholder="Buscar nombre, cédula, motivo..." id="srch-reg" oninput="filterRegistro()">
+    <select id="fil-est-reg" onchange="filterRegistro()">
+      <option value="">Todos</option><option>Activo</option><option>Desactivado</option>
+    </select>
+    <select id="fil-mes-reg" onchange="filterRegistro()">
+      <option value="">Todos los meses</option>
+      <option value="2026-05">Mayo 2026</option>
+      <option value="2026-04">Abril 2026</option>
+    </select>
+    <button class="btn btn-sm" onclick="exportarRegistro()"><i class="ti ti-download"></i>Exportar</button>
+  </div>
+  <table class="tbl">
+    <thead><tr><th>Fecha</th><th>Paciente</th><th>Cédula</th><th>Área de lesión</th><th>Dirección</th><th>Teléfono</th><th>Máquina</th><th>Estatus</th><th>Colocación / Nota</th><th>Conduce</th><th></th></tr></thead>
+    <tbody id="tbody-reg"></tbody>
+  </table>
+</div>`;
+  filterRegistro();
+}
+function filterRegistro(){
+  const q=(document.getElementById('srch-reg')||{}).value?.toLowerCase()||'';
+  const est=(document.getElementById('fil-est-reg')||{}).value||'';
+  const mes=(document.getElementById('fil-mes-reg')||{}).value||'';
+  const rows=[...DB.registros].reverse().filter(r=>
+    (!q||[r.nombre,r.cedula,r.motivo,r.direccion,r.tel1].some(x=>x&&x.toLowerCase().includes(q)))&&
+    (!est||r.estatus===est)&&(!mes||r.fecha.startsWith(mes))
+  );
+  const tb=document.getElementById('tbody-reg');if(!tb)return;
+  tb.innerHTML=rows.map(r=>`
+  <tr onclick="verPacienteDetalle('${(r.nombre||'').replace(/'/g,"\\'")}')">
+    <td style="font-size:12px;white-space:nowrap">${fmtD(r.fecha)}</td>
+    <td><div style="font-weight:500">${r.nombre||'—'}</div><div style="font-size:11px;color:var(--text2)">${r.edad?r.edad+' años ':''} ${r.sexo}</div></td>
+    <td style="font-family:monospace;font-size:12px">${r.cedula||'—'}</td>
+    <td style="font-size:12px">${r.lesion||'—'}</td>
+    <td style="font-size:12px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.direccion||'—'}</td>
+    <td style="font-size:12px">${r.tel1||'—'}</td>
+    <td>${r.maquina?`<span class="badge badge-brand" style="font-size:10px">${getMaquinaLabel(r.maquina)}</span>`:'<span style="color:var(--text3);font-size:12px">—</span>'}</td>
+    <td>${stBadge(r.estatus)}</td>
+    <td style="font-size:12px;color:var(--text2);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.notas||'').replace(/"/g,'&quot;')}">${r.motivo||'—'}${r.notas?` <span style="cursor:help">💬</span>`:''}</td>
+    <td style="font-weight:600;white-space:nowrap">${r.facturacion?fmt(r.facturacion):'—'}</td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-sm btn-ghost" title="Generar conduce" onclick="event.stopPropagation();generarConduce('${r.id}')"><i class="ti ti-printer"></i></button>
+      <button class="btn btn-sm btn-danger" title="Eliminar colocación" onclick="event.stopPropagation();eliminarColocacion('${r.id}')"><i class="ti ti-trash"></i></button>
+    </td>
+  </tr>`).join('')||`<tr><td colspan="11"><div class="empty-state"><i class="ti ti-database-off"></i>Sin resultados</div></td></tr>`;
+}
+
+function exportarRegistro(){window.open('/api/exportar/registros/excel','_blank');}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MÁQUINAS (Inventario)
+// ══════════════════════════════════════════════════════════════════════════════
+function renderMaquinas(){
+  const enUso=DB.maquinas.filter(m=>m.paciente_actual).length;
+  document.getElementById('content').innerHTML=`
+<div class="metrics">
+  <div class="metric"><div class="metric-label">Total máquinas</div><div class="metric-val">8</div></div>
+  <div class="metric"><div class="metric-label">En uso ahora</div><div class="metric-val ok">${enUso}</div><div class="metric-sub">Con paciente activo</div></div>
+  <div class="metric"><div class="metric-label">Disponibles</div><div class="metric-val ok">${DB.maquinas.filter(m=>!m.paciente_actual&&m.estado==='Operativa').length}</div></div>
+  <div class="metric"><div class="metric-label">Requieren atención</div><div class="metric-val warn">${DB.maquinas.filter(m=>m.estado!=='Operativa'&&m.estado!=='Sin registrar').length}</div></div>
+</div>
+
+<div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>Máquina</th><th>N° Serial</th><th>Estado</th><th>Paciente actual</th><th>Ubicación</th><th>Fecha entrada</th><th>Historial</th><th>Notas</th><th></th></tr></thead>
+    <tbody>
+    ${DB.maquinas.map(m=>{
+      const hist=DB.registros.filter(r=>r.maquina===m.id);
+      const activo=DB.registros.find(r=>r.maquina===m.id&&r.estatus==='Activo');
+      return`<tr onclick="verMaquinaDetalle('${m.id}')">
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:32px;height:32px;border-radius:8px;background:${activo?'var(--ok-bg)':'var(--bg2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="ti ti-device-laptop-medical" style="font-size:16px;color:${activo?'var(--ok-t)':'var(--text3)'}"></i>
+            </div>
+            <div><div style="font-weight:700">${m.nombre}</div></div>
+          </div>
+        </td>
+        <td style="font-family:monospace;font-size:12px">${m.serial||'—'}</td>
+        <td>${stBadge(activo?'Activa con paciente':m.estado)}</td>
+        <td>${activo?`<div style="font-weight:600;font-size:13px">${activo.nombre}</div><div style="font-size:11px;color:var(--text2)">${activo.motivo||''}</div>`:'<span style="color:var(--text3)">Disponible</span>'}</td>
+        <td style="font-size:12px">${m.ubicacion||'—'}</td>
+        <td style="font-size:12px">${m.fecha_entrada?fmtD(m.fecha_entrada):'—'}</td>
+        <td style="text-align:center"><span class="badge badge-info">${hist.length} uso${hist.length!==1?'s':''}</span></td>
+        <td style="font-size:12px;color:var(--text2)">${m.notas||'—'}</td>
+        <td>
+          <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();verMaquinaDetalle('${m.id}')"><i class="ti ti-eye"></i></button>
+          ${!activo?`<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();abrirColocacionMaq('${m.id}')"><i class="ti ti-user-plus"></i>Asignar</button>`:`<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();desactivarPorMaquina('${m.id}')"><i class="ti ti-user-minus"></i>Retirar</button>`}
+          <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();confirmarEliminarMaquina('${m.id}')"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table>
+</div>`;
+}
+
+function verMaquinaDetalle(id){
+  const m=DB.maquinas.find(x=>x.id===id);if(!m)return;
+  const hist=DB.registros.filter(r=>r.maquina===id).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const activo=hist.find(r=>r.estatus==='Activo');
+  const totalFact=hist.reduce((s,r)=>s+(r.facturacion||0),0);
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+    <div style="width:52px;height:52px;border-radius:12px;background:${activo?'var(--ok-bg)':'var(--bg2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="ti ti-device-laptop-medical" style="font-size:28px;color:${activo?'var(--ok-t)':'var(--text3)'}"></i>
+    </div>
+    <div>
+      <div style="font-size:18px;font-weight:700">${m.nombre}</div>
+      <div style="font-size:13px;color:var(--text2)">Serial: <code>${m.serial||'No registrado'}</code></div>
+      <div style="margin-top:6px;display:flex;gap:6px">
+        ${stBadge(activo?'Activa con paciente':m.estado)}
+        ${activo?`<span class="conn-badge"><i class="ti ti-user"></i>${activo.nombre.split(' ').slice(0,2).join(' ')}</span>`:''}
+      </div>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'tm-info')">Info</div>
+    <div class="tab" onclick="switchTab(this,'tm-hist')">Historial (${hist.length})</div>
+  </div>
+  <div id="tm-info">
+    ${[['Serial',m.serial||'—'],['Estado',m.estado],['Ubicación',m.ubicacion||'—'],['Fecha de entrada',m.fecha_entrada?fmtD(m.fecha_entrada):'—'],['Paciente actual',activo?activo.nombre:'Disponible'],['Colocación actual',activo?activo.motivo||'—':'—'],['Modo de uso',activo?activo.modo_uso||'—':'—'],['Cond. al entregar',activo?(activo.condicion_salida?activo.condicion_salida:'—'):'—'],['Parámetros',activo?activo.parametros||'—':'—'],['Total usos históricos',hist.length+' colocaciones'],['Total conduces',fmt(totalFact)],['Notas técnicas',m.notas||'—']].map(([l,v])=>`
+    <div class="info-row"><span class="info-label">${l}</span><span class="info-val" style="max-width:260px;text-align:right;word-break:break-word">${v}</span></div>`).join('')}
+    <div style="margin-top:14px;display:flex;gap:8px">
+      ${!activo?`<button class="btn btn-primary btn-sm" onclick="closeModal();abrirColocacionMaq('${m.id}')"><i class="ti ti-user-plus"></i>Asignar paciente</button>`:`<button class="btn btn-danger btn-sm" onclick="desactivarPorMaquina('${m.id}')"><i class="ti ti-user-minus"></i>Retirar paciente</button>`}
+      <button class="btn btn-sm" onclick="editarMaquina('${m.id}')"><i class="ti ti-edit"></i>Editar</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmarEliminarMaquina('${m.id}')"><i class="ti ti-trash"></i>Eliminar</button>
+    </div>
+  </div>
+  <div id="tm-hist" style="display:none">
+    ${hist.length?`<table class="tbl">
+      <thead><tr><th>Fecha entrega</th><th>Paciente</th><th>Modo</th><th>Cond. salida</th><th>Fecha retiro</th><th>Cond. retorno</th><th>Estado</th><th>Conduce</th></tr></thead>
+      <tbody>${hist.map(r=>`
+        <tr onclick="verPacienteDetalle('${r.nombre.replace(/'/g,"\\'")}')">
+          <td style="font-size:12px;white-space:nowrap">${fmtD(r.fecha)}</td>
+          <td style="font-size:12px;font-weight:500">${r.nombre}</td>
+          <td style="font-size:11px">${r.modo_uso||'—'}</td>
+          <td>${r.condicion_salida?condBadge(r.condicion_salida):'<span style="color:var(--text3)">—</span>'}</td>
+          <td style="font-size:12px;white-space:nowrap">${r.fecha_retiro?fmtD(r.fecha_retiro):'<span style="color:var(--ok-t);font-weight:600">En uso</span>'}</td>
+          <td>${r.condicion_retorno?condBadge(r.condicion_retorno):'<span style="color:var(--text3)">—</span>'}</td>
+          <td>${stBadge(r.estatus)}</td>
+          <td style="font-weight:600">${r.facturacion?fmt(r.facturacion):'—'}</td>
+        </tr>`).join('')}
+      </tbody></table>`:'<div class="empty-state"><i class="ti ti-history"></i>Sin historial registrado</div>'}
+  </div>
+</div>
+</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MAPA GPS
+// ══════════════════════════════════════════════════════════════════════════════
+let _mapaInst=null;
+let _mapaMarkers=[];
+let _mapaFiltro='activos'; // 'activos' | 'todos'
+
+function renderMapa(){
+  document.getElementById('content').innerHTML=`
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+  <div style="display:flex;gap:4px">
+    <button class="btn btn-sm ${_mapaFiltro==='activos'?'btn-primary':''}" onclick="_mapaFiltro='activos';actualizarMarkers()">
+      <i class="ti ti-activity"></i> Activos
+    </button>
+    <button class="btn btn-sm ${_mapaFiltro==='todos'?'btn-primary':''}" onclick="_mapaFiltro='todos';actualizarMarkers()">
+      <i class="ti ti-list"></i> Todos con GPS
+    </button>
+  </div>
+  <span id="mapa-count" style="font-size:12px;color:var(--text-light)"></span>
+  <button class="btn btn-sm btn-ghost" onclick="centrarMapaRD()" style="margin-left:auto" title="Centrar en Rep. Dom.">
+    <i class="ti ti-focus-2"></i> Centrar
+  </button>
+</div>
+<div id="mapa-container" style="height:calc(100vh - 200px);min-height:400px;border-radius:var(--r);overflow:hidden;border:1px solid var(--border)"></div>
+<div style="margin-top:8px;font-size:11px;color:var(--text-light)">
+  <i class="ti ti-info-circle"></i>
+  Los pines GPS se asignan al guardar una colocación. Haz clic en un marcador para ver el paciente.
+  <span style="display:inline-flex;align-items:center;gap:3px;margin-left:10px"><span style="width:10px;height:10px;border-radius:50%;background:#1a9b6c;display:inline-block"></span> Activo</span>
+  <span style="display:inline-flex;align-items:center;gap:3px;margin-left:6px"><span style="width:10px;height:10px;border-radius:50%;background:#9aa5b4;display:inline-block"></span> Histórico</span>
+</div>`;
+  setTimeout(initMapa, 50);
+}
+
+function initMapa(){
+  const el=document.getElementById('mapa-container');
+  if(!el) return;
+  if(_mapaInst){
+    _mapaInst.invalidateSize();
+    actualizarMarkers();
+    return;
+  }
+  // Center on Santo Domingo, Dominican Republic
+  _mapaInst=L.map('mapa-container').setView([18.4861,-69.9312],11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom:19,
+  }).addTo(_mapaInst);
+  actualizarMarkers();
+}
+
+function iconoMapa(activo){
+  const color=activo?'#1a9b6c':'#9aa5b4';
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38">
+    <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 24 14 24S28 24.5 28 14C28 6.27 21.73 0 14 0z" fill="${color}"/>
+    <circle cx="14" cy="14" r="7" fill="white"/>
+  </svg>`;
+  return L.divIcon({
+    html:svg,className:'',iconSize:[28,38],iconAnchor:[14,38],popupAnchor:[0,-36],
+  });
+}
+
+function actualizarMarkers(){
+  if(!_mapaInst) return;
+  _mapaMarkers.forEach(m=>m.remove());
+  _mapaMarkers=[];
+  const regs=DB.registros.filter(r=>{
+    if(!r.lat||!r.lng) return false;
+    if(_mapaFiltro==='activos') return r.estatus==='Activo';
+    return true;
+  });
+  document.getElementById('mapa-count').textContent=`${regs.length} ubicacion${regs.length!==1?'es':''}`;
+  // Update filter buttons appearance
+  document.querySelectorAll('#content .btn.btn-sm').forEach(b=>{
+    if(b.textContent.includes('Activos')) b.className='btn btn-sm'+(_mapaFiltro==='activos'?' btn-primary':'');
+    if(b.textContent.includes('Todos')) b.className='btn btn-sm'+(_mapaFiltro==='todos'?' btn-primary':'');
+  });
+  regs.forEach(r=>{
+    const activo=r.estatus==='Activo';
+    const maqNombre=DB.maquinas.find(m=>m.id===r.maquina)?.nombre||'—';
+    const popup=`
+      <div style="font-size:13px;min-width:180px">
+        <div style="font-weight:700;margin-bottom:4px">${r.nombre}</div>
+        <div style="color:#666;font-size:12px;margin-bottom:2px"><b>Lesión:</b> ${r.lesion||'—'}</div>
+        <div style="color:#666;font-size:12px;margin-bottom:2px"><b>Máquina:</b> ${maqNombre}</div>
+        <div style="color:#666;font-size:12px;margin-bottom:2px"><b>Dirección:</b> ${r.direccion||'—'}</div>
+        <div style="color:#666;font-size:12px;margin-bottom:6px"><b>Fecha:</b> ${fmtD(r.fecha)}</div>
+        <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${activo?'#e6f5ef':'#f4f6f8'};color:${activo?'#0d6644':'#4a5568'}">${r.estatus}</span>
+      </div>`;
+    const marker=L.marker([r.lat,r.lng],{icon:iconoMapa(activo)})
+      .bindPopup(popup,{maxWidth:240})
+      .addTo(_mapaInst);
+    marker.on('click',()=>marker.openPopup());
+    _mapaMarkers.push(marker);
+  });
+  if(_mapaMarkers.length>0){
+    const group=L.featureGroup(_mapaMarkers);
+    _mapaInst.fitBounds(group.getBounds().pad(0.2),{maxZoom:14});
+  }
+}
+
+function centrarMapaRD(){
+  if(_mapaInst) _mapaInst.setView([18.4861,-69.9312],11);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FACTURACIÓN
+// ══════════════════════════════════════════════════════════════════════════════
+let _factFiltroMes='';
+let _factFiltroPac='';
+
+function renderFacturacion(){
+  // Unique months from all records with a conduce
+  const meses=[...new Set(
+    DB.registros.filter(r=>r.facturacion>0).map(r=>r.fecha.slice(0,7))
+  )].sort().reverse();
+  if(!_factFiltroMes && meses.length) _factFiltroMes=meses[0];
+
+  // Filtered conduces
+  const conduces=DB.registros.filter(r=>{
+    if(r.facturacion<=0 && r.saldo_pendiente<=0) return false;
+    if(_factFiltroMes && !r.fecha.startsWith(_factFiltroMes)) return false;
+    if(_factFiltroPac && !r.nombre.toLowerCase().includes(_factFiltroPac.toLowerCase())) return false;
+    return true;
+  }).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+
+  // Metrics (always over entire dataset, not just filtered)
+  const allConduces=DB.registros.filter(r=>r.facturacion>0);
+  const totalFact=allConduces.reduce((s,r)=>s+(r.facturacion||0),0);
+  const totalSaldo=DB.registros.reduce((s,r)=>s+(r.saldo_pendiente||0),0);
+  const totalCobrado=totalFact-totalSaldo;
+  const pacConSaldo=[...new Set(DB.registros.filter(r=>r.saldo_pendiente>0).map(r=>r.nombre))];
+
+  // Patient summary for sidebar (filtered month)
+  const pacMap={};
+  conduces.forEach(r=>{
+    if(!pacMap[r.nombre]) pacMap[r.nombre]={nombre:r.nombre,facturado:0,saldo:0,count:0};
+    pacMap[r.nombre].facturado+=r.facturacion||0;
+    pacMap[r.nombre].saldo+=r.saldo_pendiente||0;
+    pacMap[r.nombre].count++;
+  });
+  const pacList=Object.values(pacMap).sort((a,b)=>b.facturado-a.facturado);
+  const maxFact=pacList[0]?.facturado||1;
+
+  document.getElementById('content').innerHTML=`
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-label">Total facturado</div>
+    <div class="metric-val" style="font-size:16px">${fmt(totalFact)}</div>
+    <div class="metric-sub">${allConduces.length} conduces emitidos</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Total cobrado</div>
+    <div class="metric-val ok">${fmt(totalCobrado)}</div>
+    <div class="metric-sub">${Math.round(totalFact?totalCobrado/totalFact*100:0)}% del total</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Saldo pendiente</div>
+    <div class="metric-val ${totalSaldo>0?'warn':'ok'}">${fmt(totalSaldo)}</div>
+    <div class="metric-sub">${pacConSaldo.length} paciente${pacConSaldo.length!==1?'s':''} con deuda</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Pacientes facturados</div>
+    <div class="metric-val">${pacList.length>0?Object.keys(pacMap).length:new Set(allConduces.map(r=>r.nombre)).size}</div>
+    <div class="metric-sub">en el período</div>
+  </div>
+</div>
+
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+  <select style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)" onchange="_factFiltroMes=this.value;renderFacturacion()">
+    <option value="">Todos los meses</option>
+    ${meses.map(m=>`<option value="${m}" ${m===_factFiltroMes?'selected':''}>${fmtMes(m)}</option>`).join('')}
+  </select>
+  <input type="search" placeholder="Buscar paciente…" value="${_factFiltroPac}"
+    style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;flex:1;min-width:160px;background:var(--surface)"
+    oninput="_factFiltroPac=this.value;renderFacturacion()">
+  <button class="btn btn-sm" onclick="window.open('/api/exportar/registros/excel','_blank')" title="Exportar Excel"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+  <button class="btn btn-sm" onclick="window.open('/api/exportar/registros/pdf','_blank')" title="Exportar PDF"><i class="ti ti-file-description"></i> PDF</button>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
+
+<div class="card" style="padding:0;overflow:hidden">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Paciente</th>
+        <th>Colocación</th>
+        <th style="text-align:right">Conduce</th>
+        <th style="text-align:right">Saldo</th>
+        <th style="text-align:right">Cobrado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    ${conduces.length===0?`<tr><td colspan="7"><div class="empty-state"><i class="ti ti-receipt-off"></i>Sin conduces para este período</div></td></tr>`:''}
+    ${conduces.map(r=>{
+      const saldo=r.saldo_pendiente||0;
+      const cobrado=(r.facturacion||0)-saldo;
+      return `
+    <tr>
+      <td style="font-size:11px;white-space:nowrap">${fmtD(r.fecha)}</td>
+      <td>
+        <span style="font-size:13px;font-weight:600;cursor:pointer" onclick="verPacienteDetalle('${r.nombre.replace(/'/g,"\\'")}')">
+          ${r.nombre}
+        </span>
+      </td>
+      <td style="font-size:12px;color:var(--text-light)">${r.motivo||'—'}</td>
+      <td style="text-align:right;font-weight:700;font-size:13px">${fmt(r.facturacion)}</td>
+      <td style="text-align:right">
+        ${saldo>0
+          ?`<span style="color:var(--warn);font-weight:600;font-size:13px">${fmt(saldo)}</span>`
+          :`<span style="color:var(--ok);font-size:12px">—</span>`}
+      </td>
+      <td style="text-align:right;font-size:13px;color:var(--ok);font-weight:600">${fmt(cobrado)}</td>
+      <td style="text-align:right">
+        <button class="btn btn-sm" onclick="abrirEditConduce('${r.id}')" title="Editar conduce">
+          <i class="ti ti-pencil"></i>
+        </button>
+      </td>
+    </tr>`}).join('')}
+    </tbody>
+    ${conduces.length>0?`
+    <tfoot>
+      <tr style="background:var(--surface-alt,#f8f9fa);font-weight:700">
+        <td colspan="3" style="font-size:12px;color:var(--text-light)">Total (${conduces.length} conduces)</td>
+        <td style="text-align:right">${fmt(conduces.reduce((s,r)=>s+(r.facturacion||0),0))}</td>
+        <td style="text-align:right;color:var(--warn)">${fmt(conduces.reduce((s,r)=>s+(r.saldo_pendiente||0),0))}</td>
+        <td style="text-align:right;color:var(--ok)">${fmt(conduces.reduce((s,r)=>s+(r.facturacion||0)-(r.saldo_pendiente||0),0))}</td>
+        <td></td>
+      </tr>
+    </tfoot>`:''}
+  </table>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+  <div class="card">
+    <div class="card-title">Por paciente</div>
+    ${pacList.length===0?`<div class="empty-state" style="padding:16px"><i class="ti ti-user-off"></i>Sin datos</div>`:''}
+    ${pacList.map(p=>`
+    <div style="padding:8px 0;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="verPacienteDetalle('${p.nombre.replace(/'/g,"\\'")}')">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+        <span style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">${p.nombre}</span>
+        <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmt(p.facturado)}</span>
+      </div>
+      <div class="progress" style="margin-bottom:3px">
+        <div class="progress-bar" style="width:${Math.round(p.facturado/maxFact*100)}%;background:var(--brand)"></div>
+      </div>
+      ${p.saldo>0?`<div style="font-size:11px;color:var(--warn)"><i class="ti ti-alert-triangle" style="font-size:10px"></i> Saldo pendiente: ${fmt(p.saldo)}</div>`:''}
+    </div>`).join('')}
+  </div>
+</div>
+
+</div>`;
+}
+
+function fmtMes(ym){
+  const [y,m]=ym.split('-');
+  const nombres=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return `${nombres[parseInt(m)-1]} ${y}`;
+}
+
+function abrirEditConduce(id){
+  const r=DB.registros.find(x=>x.id===id);
+  if(!r) return;
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal" style="max-width:420px">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title"><i class="ti ti-receipt"></i> Editar conduce</div>
+  <div style="font-size:13px;color:var(--text-light);margin-bottom:16px">${r.nombre} · ${fmtD(r.fecha)}</div>
+  <div class="form-grid">
+    <div class="form-group span2">
+      <label>Monto del conduce (DOP) *</label>
+      <input type="number" id="ec-fact" value="${r.facturacion||0}" min="0" step="500">
+    </div>
+    <div class="form-group span2">
+      <label>Saldo pendiente (DOP)</label>
+      <input type="number" id="ec-saldo" value="${r.saldo_pendiente||0}" min="0" step="500">
+      <div style="font-size:11px;color:var(--text-light);margin-top:4px">Deja en 0 si el conduce está totalmente cobrado</div>
+    </div>
+    <div class="form-group span2">
+      <label>N° de colocación / nota</label>
+      <input type="text" id="ec-motivo" value="${r.motivo||''}">
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-primary" style="flex:1" onclick="guardarEditConduce('${id}')"><i class="ti ti-device-floppy"></i> Guardar</button>
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+</div>`;
+}
+
+async function guardarEditConduce(id){
+  const fact=parseFloat(document.getElementById('ec-fact').value)||0;
+  const saldo=parseFloat(document.getElementById('ec-saldo').value)||0;
+  const motivo=document.getElementById('ec-motivo').value;
+  if(saldo>fact){alert('El saldo pendiente no puede ser mayor al monto del conduce.');return;}
+  try{
+    const updated=await api.put('/registros/'+id,{facturacion:fact,saldo_pendiente:saldo,motivo});
+    const idx=DB.registros.findIndex(r=>r.id===id);
+    if(idx>-1) DB.registros[idx]=updated;
+    showToast('Conduce actualizado');
+    closeModal();
+    renderFacturacion();
+  }catch(e){showToast('Error: '+e.message,true);}
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FORMULARIOS
+// ══════════════════════════════════════════════════════════════════════════════
+function abrirColocacion(nombrePreset){
+  const pacOpts=getPacientesUnicos().map(p=>`<option ${p.nombre===nombrePreset?'selected':''}>${p.nombre}</option>`).join('');
+  const maqDisp=DB.maquinas.filter(m=>!m.paciente_actual&&m.estado==='Operativa');
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title">Nueva colocación de máquina</div>
+  <div class="form-grid">
+    <div class="form-group span2"><label>Paciente *</label>
+      <select id="col-pac" onchange="onPacChange()">
+        <option value="">— Seleccionar o escribir —</option>
+        ${pacOpts}
+        <option value="__nuevo__">+ Nuevo paciente</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Fecha *</label><input type="date" id="col-fecha" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="form-group"><label>N° Colocación</label><input type="text" id="col-num" placeholder="1era Colocacion"></div>
+    <div class="form-group"><label>Máquina a asignar</label>
+      <select id="col-maq">
+        <option value="">Sin máquina asignada</option>
+        ${maqDisp.map(m=>`<option value="${m.id}">${m.nombre} (Serial: ${m.serial||'—'})</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Área de lesión</label><input type="text" id="col-lesion" placeholder="Pierna Derecha, Pecho..."></div>
+    <div class="form-group"><label>Dirección / Centro</label><input type="text" id="col-dir" placeholder="Hospital, domicilio..."></div>
+    <div class="form-group"><label>Teléfono</label><input type="text" id="col-tel" placeholder="809-000-0000"></div>
+    <div class="form-group"><label>ARS / Seguro</label>
+      <select id="col-ars">${arsOptsGrouped()}</select>
+    </div>
+    <div class="form-group"><label>Dr. que refiere</label><input type="text" id="col-dr" placeholder="Nombre del médico"></div>
+    <div class="form-group"><label>Monto del Conduce (DOP)</label><input type="number" id="col-fact" placeholder="13000" min="0"></div>
+    <div class="section-divider">Condiciones de uso del equipo</div>
+    <div class="form-group"><label>Modo de uso</label>
+      <select id="col-modo">
+        <option value="Consulta">Consulta (en clínica)</option>
+        <option value="Domicilio">Domicilio</option>
+        <option value="Hospitalario">Hospitalario</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Condición del equipo al entregar</label>
+      <select id="col-cond-salida">
+        <option value="Óptima">Óptima</option>
+        <option value="Buena">Buena</option>
+        <option value="Requiere revisión">Requiere revisión</option>
+      </select>
+    </div>
+    <div class="form-group span2"><label>Parámetros / configuración del equipo</label>
+      <select id="col-parametros">
+        <option value="">— Seleccionar presión —</option>
+        <option value="100">100 mmHg</option>
+        <option value="200">200 mmHg</option>
+        <option value="300">300 mmHg</option>
+      </select>
+    </div>
+    <div class="form-group span2"><label>Notas / observaciones clínicas</label><textarea id="col-notas" placeholder="Estado del paciente, indicaciones especiales, seguimiento..."></textarea></div>
+    <div class="section-divider">Seguimiento</div>
+    <div class="form-group"><label>Próxima visita estimada</label><input type="date" id="col-proxima"></div>
+    <div class="section-divider">Ubicación GPS</div>
+    <div class="form-group span2">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">
+        <div style="flex:1;min-width:110px">
+          <label style="font-size:11px;color:var(--text-light)">Latitud</label>
+          <input type="number" id="col-lat" step="any" placeholder="18.4861" style="width:100%">
+        </div>
+        <div style="flex:1;min-width:110px">
+          <label style="font-size:11px;color:var(--text-light)">Longitud</label>
+          <input type="number" id="col-lng" step="any" placeholder="-69.9312" style="width:100%">
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" onclick="capturarGPS()" style="white-space:nowrap">
+          <i class="ti ti-current-location"></i> Mi ubicación
+        </button>
+      </div>
+      <div id="col-mini-map" style="height:180px;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);background:#e8ecf0"></div>
+      <div style="font-size:10px;color:var(--text-light);margin-top:4px">Haz clic en el mapa o usa "Mi ubicación" para fijar el punto. El pin se puede arrastrar.</div>
+    </div>
+    <div class="section-divider">Productos utilizados</div>
+    <div class="form-group span2">
+      <div id="col-productos-list"></div>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="addProductoRow('col-productos-list')"><i class="ti ti-plus"></i> Agregar producto</button>
+      <div id="col-prod-total" class="prod-total"></div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Los productos se registran aparte del monto del conduce. Ambos se muestran en el conduce de descargo.</div>
+    </div>
+    <div class="section-divider">Fotos de la colocación</div>
+    <div class="form-group span2">
+      <label><i class="ti ti-camera" style="vertical-align:-2px"></i> Subir fotos</label>
+      <input type="file" id="col-fotos" multiple accept="image/*" onchange="addFotoPreview(this,'col-foto-preview')" style="font-size:12px">
+      <div id="col-foto-preview" class="foto-thumbs" style="margin-top:8px"></div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Advertencia: las fotos se guardan en base64 en el localStorage del navegador, lo que puede consumir espacio considerable. Se recomienda no subir más de 5 fotos por colocación.</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-primary" style="flex:1" onclick="guardarColocacion()"><i class="ti ti-device-floppy"></i>Guardar colocación</button>
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+</div>`;
+  setTimeout(initMiniMapa, 80);
+}
+
+let _miniMap=null, _miniMarker=null;
+function initMiniMapa(){
+  const el=document.getElementById('col-mini-map');
+  if(!el) return;
+  if(_miniMap){ _miniMap.remove(); _miniMap=null; _miniMarker=null; }
+  _miniMap=L.map('col-mini-map',{zoomControl:true}).setView([18.4861,-69.9312],11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap',maxZoom:19,
+  }).addTo(_miniMap);
+  _miniMap.on('click',e=>{
+    const {lat,lng}=e.latlng;
+    fijarPinMini(lat,lng);
+  });
+  // If lat/lng already set (editing), show it
+  const lat=parseFloat(document.getElementById('col-lat')?.value);
+  const lng=parseFloat(document.getElementById('col-lng')?.value);
+  if(lat&&lng) fijarPinMini(lat,lng);
+}
+
+function fijarPinMini(lat,lng){
+  document.getElementById('col-lat').value=lat.toFixed(6);
+  document.getElementById('col-lng').value=lng.toFixed(6);
+  if(_miniMarker) _miniMarker.setLatLng([lat,lng]);
+  else{
+    _miniMarker=L.marker([lat,lng],{draggable:true}).addTo(_miniMap);
+    _miniMarker.on('dragend',e=>{
+      const p=e.target.getLatLng();
+      document.getElementById('col-lat').value=p.lat.toFixed(6);
+      document.getElementById('col-lng').value=p.lng.toFixed(6);
+    });
+  }
+  _miniMap.setView([lat,lng],15);
+}
+
+function capturarGPS(){
+  if(!navigator.geolocation){showToast('GPS no disponible en este navegador',true);return;}
+  navigator.geolocation.getCurrentPosition(
+    pos=>fijarPinMini(pos.coords.latitude,pos.coords.longitude),
+    err=>showToast('Error GPS: '+err.message,true),
+    {enableHighAccuracy:true,timeout:8000}
+  );
+}
+
+function abrirColocacionMaq(maqId){
+  abrirColocacion(null);
+  setTimeout(()=>{const s=document.getElementById('col-maq');if(s)s.value=maqId;},50);
+}
+
+async function guardarColocacion(){
+  const pac=document.getElementById('col-pac').value;
+  const fecha=document.getElementById('col-fecha').value;
+  if(!pac||pac==='__nuevo__'||!fecha){alert('Selecciona un paciente y una fecha.');return;}
+  const maqId=document.getElementById('col-maq').value;
+  const nuevo={
+    fecha,nombre:pac,
+    cedula:'',sexo:'',edad:null,
+    lesion:document.getElementById('col-lesion').value,
+    direccion:document.getElementById('col-dir').value,
+    tel1:document.getElementById('col-tel').value,tel2:'',
+    dr_refiere:document.getElementById('col-dr').value,
+    ars:document.getElementById('col-ars').value,
+    maquina:maqId,estatus:'Activo',
+    motivo:document.getElementById('col-num').value,
+    facturacion:parseFloat(document.getElementById('col-fact').value)||0,
+    modo_uso:document.getElementById('col-modo').value,
+    condicion_salida:document.getElementById('col-cond-salida').value,
+    parametros:document.getElementById('col-parametros').value,
+    notas:document.getElementById('col-notas').value,
+    proxima_colocacion:document.getElementById('col-proxima').value||null,
+    notas_seguimiento:'',
+    lat:parseFloat(document.getElementById('col-lat').value)||null,
+    lng:parseFloat(document.getElementById('col-lng').value)||null,
+    productos:getProductosFromList('col-productos-list'),
+    fotos:getFotosFromPreview('col-foto-preview'),
+    fecha_retiro:null,condicion_retorno:'',observaciones_retiro:'',
+  };
+  try{
+    const creado=await api.post('/registros',nuevo);
+    DB.registros.push(creado);
+    if(maqId){const m=DB.maquinas.find(x=>x.id===maqId);if(m)m.paciente_actual=pac;}
+    showToast('Colocación guardada');
+  }catch(e){showToast('Error al guardar: '+e.message,true);return;}
+  closeModal();
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas})[VIEW]?.();
+}
+
+function abrirNuevoPaciente(){
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title">Registrar nuevo paciente</div>
+  <div class="form-grid">
+    <div class="form-group span2"><label>Nombre completo *</label><input type="text" id="np-nombre" placeholder="Nombre y apellidos"></div>
+    <div class="form-group"><label>Cédula</label><input type="text" id="np-cedula" placeholder="001-0000000-0"></div>
+    <div class="form-group"><label>Fecha de hoy</label><input type="date" id="np-fecha" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="form-group"><label>Sexo</label><select id="np-sexo"><option value="">—</option><option value="M">M</option><option value="F">F</option></select></div>
+    <div class="form-group"><label>Edad</label><input type="number" id="np-edad" placeholder="65" min="0"></div>
+    <div class="form-group"><label>Área de lesión</label><input type="text" id="np-lesion" placeholder="Pierna Derecha, Pecho..."></div>
+    <div class="form-group"><label>Dirección / Centro</label><input type="text" id="np-dir" placeholder="Hospital o domicilio"></div>
+    <div class="form-group"><label>Teléfono 1</label><input type="text" id="np-tel1" placeholder="809-000-0000 (Contacto)"></div>
+    <div class="form-group"><label>Teléfono 2</label><input type="text" id="np-tel2" placeholder="829-000-0000 (Familiar)"></div>
+    <div class="form-group"><label>Dr. que refiere</label><input type="text" id="np-dr" placeholder="Nombre del médico referidor"></div>
+    <div class="form-group span2"><label>ARS / Seguro <button type="button" class="btn btn-sm btn-ghost" style="padding:1px 5px;font-size:10px;vertical-align:middle" onclick="abrirGestionARS('np-ars')" title="Gestionar ARS"><i class="ti ti-settings-2"></i></button></label><select id="np-ars">${arsOptsGrouped()}</select></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-primary" style="flex:1" onclick="guardarNuevoPaciente()"><i class="ti ti-user-plus"></i>Registrar paciente</button>
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+</div>`;
+}
+
+async function guardarNuevoPaciente(){
+  const nombre=document.getElementById('np-nombre').value.trim();
+  if(!nombre){alert('El nombre es obligatorio.');return;}
+  const nuevo={
+    fecha:document.getElementById('np-fecha').value,nombre,
+    cedula:document.getElementById('np-cedula').value,
+    sexo:document.getElementById('np-sexo').value,
+    edad:parseInt(document.getElementById('np-edad').value)||null,
+    lesion:document.getElementById('np-lesion').value,
+    direccion:document.getElementById('np-dir').value,
+    tel1:document.getElementById('np-tel1').value,
+    tel2:document.getElementById('np-tel2').value,
+    dr_refiere:document.getElementById('np-dr').value,
+    ars:document.getElementById('np-ars').value,
+    maquina:'',estatus:'Activo',motivo:'1era Colocacion',
+    facturacion:0,
+  };
+  const created=await api.post('/registros',nuevo);
+  DB.registros.push(created);
+  closeModal();
+  renderPacientes();
+}
+
+function abrirNuevaMaquina(){
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title">Registrar nueva máquina</div>
+  <div class="form-grid">
+    <div class="form-group"><label>Nombre *</label><input type="text" id="nm-nombre" placeholder="Maquina No. 9"></div>
+    <div class="form-group"><label>N° Serial</label><input type="text" id="nm-serial" placeholder="250000001"></div>
+    <div class="form-group"><label>Estado</label><select id="nm-estado"><option>Operativa</option><option>Requiere Revisión</option><option>Fuera de Servicio</option><option>Sin registrar</option></select></div>
+    <div class="form-group"><label>Fecha de entrada</label><input type="date" id="nm-fecha" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="form-group"><label>Ubicación</label><input type="text" id="nm-ubic" placeholder="Consulta, Domicilio..."></div>
+    <div class="form-group span2"><label>Notas</label><textarea id="nm-notas" placeholder="Observaciones sobre la máquina..."></textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-primary" style="flex:1" onclick="guardarNuevaMaquina()"><i class="ti ti-device-floppy"></i>Registrar máquina</button>
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+</div>`;
+}
+
+async function guardarNuevaMaquina(){
+  const nombre=document.getElementById('nm-nombre').value.trim();
+  if(!nombre){alert('El nombre es obligatorio.');return;}
+  try{
+    const creada=await api.post('/maquinas',{nombre,serial:document.getElementById('nm-serial').value,estado:document.getElementById('nm-estado').value,ubicacion:document.getElementById('nm-ubic').value,notas:document.getElementById('nm-notas').value});
+    creada.paciente_actual=null;
+    DB.maquinas.push(creada);
+    showToast('Máquina registrada');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();renderMaquinas();
+}
+
+function editarMaquina(id){
+  const m=DB.maquinas.find(x=>x.id===id);if(!m)return;
+  closeModal();
+  setTimeout(()=>{
+    document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title">Editar ${m.nombre}</div>
+  <div class="form-grid">
+    <div class="form-group"><label>Nombre</label><input type="text" id="em-nombre" value="${m.nombre}"></div>
+    <div class="form-group"><label>N° Serial</label><input type="text" id="em-serial" value="${m.serial}"></div>
+    <div class="form-group"><label>Estado</label><select id="em-estado">
+      ${['Operativa','Requiere Revisión','Fuera de Servicio','Sin registrar'].map(e=>`<option ${e===m.estado?'selected':''}>${e}</option>`).join('')}
+    </select></div>
+    <div class="form-group"><label>Fecha de entrada</label><input type="date" id="em-fecha" value="${m.fecha_entrada||''}"></div>
+    <div class="form-group"><label>Ubicación</label><input type="text" id="em-ubic" value="${m.ubicacion}"></div>
+    <div class="form-group span2"><label>Notas</label><textarea id="em-notas">${m.notas}</textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-primary" style="flex:1" onclick="saveEditMaq('${id}')"><i class="ti ti-device-floppy"></i>Guardar cambios</button>
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+</div>`;
+  },50);
+}
+
+async function saveEditMaq(id){
+  const m=DB.maquinas.find(x=>x.id===id);if(!m)return;
+  const upd={nombre:document.getElementById('em-nombre').value,serial:document.getElementById('em-serial').value,estado:document.getElementById('em-estado').value,ubicacion:document.getElementById('em-ubic').value,notas:document.getElementById('em-notas').value};
+  try{
+    const updated=await api.put('/maquinas/'+id,upd);
+    Object.assign(m,updated);
+    showToast('Máquina actualizada');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();renderMaquinas();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ACCIONES
+// ══════════════════════════════════════════════════════════════════════════════
+function desactivarPaciente(nombre){
+  const activos=DB.registros.filter(r=>r.nombre===nombre&&r.estatus==='Activo');
+  if(!activos.length)return;
+  const maqLabel=activos[0].maquina?getMaquinaLabel(activos[0].maquina):'';
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title"><i class="ti ti-device-laptop-medical" style="color:var(--brand);margin-right:6px;vertical-align:-2px"></i>Retirar equipo — ${nombre}</div>
+  ${maqLabel?`<div style="margin-bottom:14px"><span class="badge badge-brand"><i class="ti ti-device-laptop-medical"></i>${maqLabel}</span></div>`:''}
+  <div class="form-grid">
+    <div class="form-group"><label>Fecha de retiro *</label><input type="date" id="ret-fecha" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="form-group"><label>Condición del equipo al devolver</label>
+      <select id="ret-cond">
+        <option value="Óptima">Óptima — Sin novedad</option>
+        <option value="Buena">Buena — Uso normal</option>
+        <option value="Con daños leves">Con daños leves</option>
+        <option value="Requiere revisión">Requiere revisión técnica</option>
+        <option value="Dañado">Dañado — Fuera de servicio</option>
+      </select>
+    </div>
+    <div class="form-group span2"><label>Observaciones del retiro</label>
+      <textarea id="ret-obs" placeholder="Estado del paciente, motivo del retiro, incidencias con el equipo..."></textarea>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-danger" style="flex:1" onclick="confirmarRetiro('${nombre.replace(/'/g,"\\'")}')"><i class="ti ti-player-stop"></i>Confirmar retiro</button>
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+</div>`;
+}
+
+async function confirmarRetiro(nombre){
+  const fecha=document.getElementById('ret-fecha').value;
+  const cond=document.getElementById('ret-cond').value;
+  const obs=document.getElementById('ret-obs').value;
+  try{
+    await api.post('/pacientes/'+encodeURIComponent(nombre)+'/retiro',{fecha,cond,obs});
+    await initDB();
+    showToast('Equipo retirado');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas})[VIEW]?.();
+}
+
+function desactivarPorMaquina(maqId){
+  const activo=DB.registros.find(r=>r.maquina===maqId&&r.estatus==='Activo');
+  if(!activo)return;
+  closeModal();
+  setTimeout(()=>desactivarPaciente(activo.nombre),50);
+}
+
+async function activarPaciente(nombre){
+  const ult=DB.registros.filter(r=>r.nombre===nombre).slice(-1)[0];
+  if(!ult)return;
+  try{
+    await api.put('/registros/'+ult.id,{estatus:'Activo'});
+    ult.estatus='Activo';
+    showToast('Paciente activado');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones})[VIEW]?.();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UTILIDADES
+// ══════════════════════════════════════════════════════════════════════════════
+function switchTab(el,tabId){
+  const modal=el.closest('.modal');
+  modal.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  const prefix=tabId.split('-')[0]+'-';
+  modal.querySelectorAll(`[id^="${prefix}"]`).forEach(d=>d.style.display='none');
+  const t=document.getElementById(tabId);if(t)t.style.display='';
+}
+
+function closeModal(){
+  if(_miniMap){_miniMap.remove();_miniMap=null;_miniMarker=null;}
+  document.getElementById('modal-root').innerHTML='';
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ASIGNAR EQUIPO — modal enfocado en selección de máquina
+// ══════════════════════════════════════════════════════════════════════════════
+function abrirAsignarEquipo(nombre){
+  const maqDisp = DB.maquinas.filter(m=>!m.paciente_actual && m.estado==='Operativa');
+  const maqTodas = DB.maquinas;
+  // Auto-calcular N° colocación
+  const p = getPacientesUnicos().find(x=>x.nombre===nombre);
+  const etiquetas=['1era','2da','3era','4ta','5ta','6ta','7ma','8va','9na','10ma'];
+  const totalColoc = p ? p.colocaciones.length : 0;
+  const numColoc = (etiquetas[totalColoc]||`${totalColoc+1}ra`) + ' Colocacion';
+  const numReadonly = totalColoc > 0;
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title"><i class="ti ti-device-laptop-medical" style="color:var(--brand);margin-right:6px;vertical-align:-2px"></i>Asignar equipo — ${nombre}</div>
+
+  <div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Equipos disponibles</div>
+    ${maqDisp.length===0?`<div class="empty-state" style="padding:16px"><i class="ti ti-circle-x" style="font-size:24px"></i><br>Todas las máquinas están en uso</div>`:`
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px" id="maq-selector">
+      ${maqDisp.map(m=>`
+      <div class="maq-card" id="msel-${m.id}" onclick="seleccionarMaq('${m.id}')" style="cursor:pointer">
+        <div style="font-size:10px;font-weight:700;color:var(--text3)">${m.id}</div>
+        <div style="font-weight:700;font-size:13px">${m.nombre}</div>
+        <div style="font-size:11px;color:var(--text2)">Serial: ${m.serial||'—'}</div>
+        <div style="font-size:11px;color:var(--text2)">${m.ubicacion||''}</div>
+      </div>`).join('')}
+    </div>`}
+  </div>
+
+  <input type="hidden" id="aeq-maqid" value="">
+  <div class="form-grid">
+    <div class="form-group"><label>Fecha *</label><input type="date" id="aeq-fecha" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="form-group"><label>N° Colocación</label><input type="text" id="aeq-num" value="${numColoc}" ${numReadonly?'readonly style="background:var(--bg2)"':''} placeholder="1era Colocacion"></div>
+    <div class="form-group"><label>Área de lesión</label><input type="text" id="aeq-lesion" placeholder="Pierna Derecha, Pecho..."></div>
+    <div class="form-group"><label>Modo de uso</label>
+      <select id="aeq-modo"><option value="Consulta">Consulta</option><option value="Domicilio">Domicilio</option><option value="Hospitalario">Hospitalario</option></select>
+    </div>
+    <div class="form-group"><label>Condición al entregar</label>
+      <select id="aeq-cond"><option value="Óptima">Óptima</option><option value="Buena">Buena</option><option value="Requiere revisión">Requiere revisión</option></select>
+    </div>
+    <div class="form-group"><label>Monto del Conduce (DOP)</label><input type="number" id="aeq-fact" placeholder="13000" min="0"></div>
+    <div class="form-group span2"><label>Parámetros / configuración del equipo</label>
+      <select id="aeq-parametros">
+        <option value="">— Seleccionar presión —</option>
+        <option value="100">100 mmHg</option>
+        <option value="200">200 mmHg</option>
+        <option value="300">300 mmHg</option>
+      </select>
+    </div>
+    <div class="form-group span2"><label>Notas / observaciones clínicas</label><textarea id="aeq-notas" placeholder="Estado del paciente, indicaciones especiales, seguimiento..."></textarea></div>
+    <div class="section-divider">Seguimiento</div>
+    <div class="form-group"><label>Próxima visita estimada</label><input type="date" id="aeq-proxima"></div>
+    <div class="section-divider">Productos utilizados</div>
+    <div class="form-group span2">
+      <div id="aeq-productos-list"></div>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="addProductoRow('aeq-productos-list')"><i class="ti ti-plus"></i> Agregar producto</button>
+      <div id="aeq-prod-total" class="prod-total"></div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Los productos se registran aparte del monto del conduce.</div>
+    </div>
+    <div class="section-divider">Fotos de la colocación</div>
+    <div class="form-group span2">
+      <label><i class="ti ti-camera" style="vertical-align:-2px"></i> Subir fotos</label>
+      <input type="file" id="aeq-fotos" multiple accept="image/*" onchange="addFotoPreview(this,'aeq-foto-preview')" style="font-size:12px">
+      <div id="aeq-foto-preview" class="foto-thumbs" style="margin-top:8px"></div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Advertencia: las fotos se guardan en base64 en localStorage. No subir más de 5 fotos por colocación.</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-primary" style="flex:1" onclick="guardarAsignarEquipo('${nombre.replace(/'/g,"\\'")}')"><i class="ti ti-device-floppy"></i>Registrar asignación</button>
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+</div>`;
+}
+
+function seleccionarMaq(id){
+  document.querySelectorAll('#maq-selector .maq-card').forEach(c=>{
+    c.style.borderColor='';c.style.background='';
+  });
+  const card=document.getElementById('msel-'+id);
+  if(card){card.style.borderColor='var(--brand)';card.style.background='var(--brand-dim)';}
+  document.getElementById('aeq-maqid').value=id;
+}
+
+async function guardarAsignarEquipo(nombre){
+  const maqId=document.getElementById('aeq-maqid').value;
+  const fecha=document.getElementById('aeq-fecha').value;
+  if(!fecha){alert('La fecha es obligatoria.');return;}
+  const p=getPacientesUnicos().find(x=>x.nombre===nombre)||{};
+  const nuevo={
+    fecha,nombre,
+    cedula:p.cedula||'',sexo:p.sexo||'',edad:p.edad||null,
+    lesion:document.getElementById('aeq-lesion').value||p.lesion||'',
+    direccion:p.direccion||'',tel1:p.tel1||'',tel2:p.tel2||'',
+    dr_refiere:p.dr_refiere||'',ars:p.ars||'Privado',
+    maquina:maqId,estatus:'Activo',
+    motivo:document.getElementById('aeq-num').value,
+    facturacion:parseFloat(document.getElementById('aeq-fact').value)||0,
+    modo_uso:document.getElementById('aeq-modo').value,
+    condicion_salida:document.getElementById('aeq-cond').value,
+    parametros:document.getElementById('aeq-parametros').value,
+    notas:document.getElementById('aeq-notas').value,
+    proxima_colocacion:document.getElementById('aeq-proxima').value||null,
+    notas_seguimiento:'',
+    productos:getProductosFromList('aeq-productos-list'),
+    fotos:getFotosFromPreview('aeq-foto-preview'),
+    fecha_retiro:null,condicion_retorno:'',observaciones_retiro:'',
+  };
+  try{
+    // The server deactivates previous active records for this patient
+    const creado=await api.post('/registros',nuevo);
+    // Deactivate locally too
+    DB.registros.filter(r=>r.nombre===nombre&&r.estatus==='Activo').forEach(r=>{
+      if(r.maquina){const m=DB.maquinas.find(x=>x.id===r.maquina);if(m)m.paciente_actual=null;}
+      r.estatus='Desactivado';
+    });
+    DB.registros.push(creado);
+    if(maqId){const m=DB.maquinas.find(x=>x.id===maqId);if(m)m.paciente_actual=nombre;}
+    showToast('Equipo asignado');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas})[VIEW]?.();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EDITAR PACIENTE — perfil maestro
+// ══════════════════════════════════════════════════════════════════════════════
+function editarPaciente(nombre){
+  const p=getPacientesUnicos().find(x=>x.nombre===nombre);
+  if(!p)return;
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal modal-lg">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title"><i class="ti ti-user-edit" style="color:var(--brand);margin-right:6px;vertical-align:-2px"></i>Editar perfil — ${nombre}</div>
+  <div class="form-grid cols3">
+    <div class="form-group span2"><label>Nombre completo *</label><input type="text" id="ep-nombre" value="${p.nombre}"></div>
+    <div class="form-group"><label>Cédula</label><input type="text" id="ep-cedula" value="${p.cedula||''}" placeholder="001-0000000-0"></div>
+    <div class="form-group"><label>Sexo</label>
+      <select id="ep-sexo">
+        <option value="">—</option>
+        <option ${p.sexo==='M'?'selected':''} value="M">M</option>
+        <option ${p.sexo==='F'?'selected':''} value="F">F</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Edad</label><input type="number" id="ep-edad" value="${p.edad||''}" min="0"></div>
+    <div class="form-group"><label>Área de lesión principal</label><input type="text" id="ep-lesion" value="${p.lesion||''}" placeholder="Pierna Derecha, Pecho..."></div>
+    <div class="section-divider">Contacto y ubicación</div>
+    <div class="form-group span2"><label>Dirección / Centro</label><input type="text" id="ep-dir" value="${p.direccion||''}" placeholder="Hospital, domicilio, clínica..."></div>
+    <div class="form-group span2"><label>Ubicación Google Maps <span style="font-weight:400;color:var(--text3)">(URL o texto de dirección)</span></label><input type="text" id="ep-maps" value="${(DB.pacientes_master[p.nombre]||{}).ubicacion_maps||''}" placeholder="https://maps.google.com/... o Av. Winston Churchill 123"></div>
+    <div class="form-group"><label>Teléfono 1</label><input type="text" id="ep-tel1" value="${p.tel1||''}" placeholder="809-000-0000 (Contacto)"></div>
+    <div class="form-group"><label>Teléfono 2</label><input type="text" id="ep-tel2" value="${p.tel2||''}" placeholder="829-000-0000 (Familiar)"></div>
+    <div class="form-group"><label>Dr. que refiere</label><input type="text" id="ep-dr" value="${p.dr_refiere||''}" placeholder="Nombre del médico"></div>
+    <div class="form-group"><label>ARS / Seguro <button type="button" class="btn btn-sm btn-ghost" style="padding:1px 5px;font-size:10px;vertical-align:middle" onclick="abrirGestionARS('ep-ars')" title="Gestionar ARS"><i class="ti ti-settings-2"></i></button></label>
+      <select id="ep-ars">${arsOptsGrouped(p.ars)}</select>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-primary" style="flex:1" onclick="guardarEditarPaciente('${nombre.replace(/'/g,"\\'")}')"><i class="ti ti-device-floppy"></i>Guardar cambios</button>
+    <button class="btn btn-ghost" onclick="closeModal();abrirAsignarEquipo('${nombre.replace(/'/g,"\\'")}')"><i class="ti ti-device-laptop-medical"></i>Asignar equipo</button>
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+</div>`;
+}
+
+async function guardarEditarPaciente(nombreOriginal){
+  const nuevoNombre=document.getElementById('ep-nombre').value.trim();
+  if(!nuevoNombre){alert('El nombre es obligatorio.');return;}
+  const datos={
+    nombre:nuevoNombre,
+    cedula:document.getElementById('ep-cedula').value,
+    sexo:document.getElementById('ep-sexo').value,
+    edad:parseInt(document.getElementById('ep-edad').value)||null,
+    lesion:document.getElementById('ep-lesion').value,
+    direccion:document.getElementById('ep-dir').value,
+    ubicacion_maps:document.getElementById('ep-maps').value,
+    tel1:document.getElementById('ep-tel1').value,
+    tel2:document.getElementById('ep-tel2').value,
+    dr_refiere:document.getElementById('ep-dr').value,
+    ars:document.getElementById('ep-ars').value,
+  };
+  try{
+    await api.put('/pacientes-master/'+encodeURIComponent(nombreOriginal),datos);
+    await initDB();
+    showToast('Perfil actualizado');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas})[VIEW]?.();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// IMPORTAR EXCEL
+// ══════════════════════════════════════════════════════════════════════════════
+function abrirImportarExcel(){
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal modal-lg">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title"><i class="ti ti-table-import" style="color:var(--brand);margin-right:6px;vertical-align:-2px"></i>Importar desde Excel</div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'imp-upload')">Cargar archivo</div>
+    <div class="tab" onclick="switchTab(this,'imp-plantilla')">Ver formato esperado</div>
+  </div>
+
+  <div id="imp-upload">
+    <div id="imp-drop" style="border:2px dashed var(--border2);border-radius:var(--rl);padding:32px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:14px"
+      onclick="document.getElementById('imp-file').click()"
+      ondragover="event.preventDefault();this.style.borderColor='var(--brand)';this.style.background='var(--brand-dim)'"
+      ondragleave="this.style.borderColor='';this.style.background=''"
+      ondrop="event.preventDefault();this.style.borderColor='';this.style.background='';parsearExcel(event.dataTransfer.files[0])">
+      <i class="ti ti-cloud-upload" style="font-size:36px;color:var(--text3);display:block;margin-bottom:8px"></i>
+      <div style="font-weight:600;margin-bottom:4px">Arrastra tu archivo Excel aquí</div>
+      <div style="font-size:12px;color:var(--text3)">o haz click para seleccionar · .xlsx / .xls</div>
+    </div>
+    <input type="file" id="imp-file" accept=".xlsx,.xls" style="display:none" onchange="parsearExcel(this.files[0])">
+    <div id="imp-preview"></div>
+  </div>
+
+  <div id="imp-plantilla" style="display:none">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">El Excel debe tener estas columnas en la primera fila (en ese orden):</div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>#</th><th>Columna</th><th>Ejemplo</th><th>Req.</th></tr></thead>
+        <tbody>
+          ${[
+            ['Nombre','Sobeida Mora','Sí'],
+            ['Cédula','024-0014327-3','No'],
+            ['Sexo','F','No'],
+            ['Edad','45','No'],
+            ['Área de lesión','Pierna Izquierda','No'],
+            ['Dirección','Los Llanos San Pedro','No'],
+            ['Teléfono 1','829-469-2280','No'],
+            ['Teléfono 2','809-000-0000','No'],
+            ['Dr. que refiere','Juan Mendez','No'],
+            ['ARS','Privado','No'],
+            ['Fecha','2026-05-03','Sí'],
+            ['ID Máquina','MAQ01','No'],
+            ['N° Colocación','1era Colocacion','No'],
+            ['Monto (DOP)','13000','No'],
+          ].map(([col,ej,req],i)=>`<tr><td style="color:var(--text3)">${i+1}</td><td style="font-weight:600">${col}</td><td style="font-family:monospace;font-size:12px;color:var(--text2)">${ej}</td><td>${req==='Sí'?'<span class="badge badge-danger">Sí</span>':'<span class="badge badge-gray">No</span>'}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;padding:10px 12px;background:var(--info-bg);border-radius:var(--r);font-size:12px;color:var(--info-t)">
+      <i class="ti ti-info-circle"></i> Si el paciente ya existe en el sistema, se actualiza su perfil. Si la máquina ID no existe, la columna se ignora.
+    </div>
+  </div>
+
+</div>
+</div>`;
+}
+
+let _importData=[];
+function parsearExcel(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    if(rows.length<2){
+      document.getElementById('imp-preview').innerHTML=`<div class="empty-state"><i class="ti ti-alert-circle"></i>El archivo no tiene datos.</div>`;
+      return;
+    }
+    const headers=rows[0].map(h=>String(h).trim());
+    _importData=rows.slice(1).filter(r=>r.some(c=>c!=='')).map(r=>{
+      const o={};
+      headers.forEach((h,i)=>o[h]=r[i]!==undefined?String(r[i]).trim():'');
+      return o;
+    });
+    const COLS=['Nombre','Cédula','Sexo','Edad','Área de lesión','Fecha','ID Máquina','N° Colocación','Monto (DOP)'];
+    const ok=_importData.filter(r=>r['Nombre']&&r['Fecha']).length;
+    const skip=_importData.length-ok;
+    document.getElementById('imp-preview').innerHTML=`
+    <div style="padding:10px 12px;background:var(--ok-bg);border-radius:var(--r);font-size:13px;color:var(--ok-t);margin-bottom:10px">
+      <i class="ti ti-check"></i> <strong>${ok} filas listas</strong> para importar${skip>0?` · <span style="color:var(--warn-t)">${skip} sin nombre o fecha (se omitirán)</span>`:''}
+    </div>
+    <div class="tbl-wrap" style="max-height:220px;overflow-y:auto">
+      <table class="tbl">
+        <thead><tr>${COLS.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${_importData.slice(0,10).map(r=>`<tr style="${(!r['Nombre']||!r['Fecha'])?'opacity:0.4':''}">
+            ${COLS.map(c=>`<td style="font-size:11px">${r[c]||'—'}</td>`).join('')}
+          </tr>`).join('')}
+          ${_importData.length>10?`<tr><td colspan="${COLS.length}" style="text-align:center;color:var(--text3);font-size:11px">... y ${_importData.length-10} filas más</td></tr>`:''}
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary" style="flex:1" onclick="confirmarImportacion()"><i class="ti ti-table-import"></i>Importar ${ok} registros</button>
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+    </div>`;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function confirmarImportacion(){
+  const validRows=_importData.filter(r=>r['Nombre']&&r['Fecha']);
+  const registros=validRows.map(r=>{
+    const maqId=r['ID Máquina']||'';
+    const maqExiste=maqId&&DB.maquinas.find(x=>x.id===maqId);
+    return {
+      fecha:r['Fecha'],nombre:r['Nombre'],
+      cedula:r['Cédula']||'',sexo:r['Sexo']||'',edad:parseInt(r['Edad'])||null,
+      lesion:r['Área de lesión']||'',direccion:r['Dirección']||'',
+      tel1:r['Teléfono 1']||'',tel2:r['Teléfono 2']||'',
+      dr_refiere:r['Dr. que refiere']||'',ars:r['ARS']||'Privado',
+      maquina:maqExiste?maqId:'',estatus:'Activo',
+      motivo:r['N° Colocación']||'',
+      facturacion:parseFloat(r['Monto (DOP)'])||0,
+    };
+  });
+  try{
+    const creados=await api.post('/registros/bulk',registros);
+    await initDB();
+    closeModal();
+    showToast(`${creados.length} registros importados`);
+  }catch(e){showToast('Error al importar: '+e.message,true);}
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas})[VIEW]?.();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ELIMINAR PACIENTE
+// ══════════════════════════════════════════════════════════════════════════════
+function confirmarEliminarPaciente(nombre){
+  const colocaciones=DB.registros.filter(r=>r.nombre===nombre).length;
+  const activo=DB.registros.find(r=>r.nombre===nombre&&r.estatus==='Activo');
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal" style="max-width:460px">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div style="text-align:center;padding:8px 0 16px">
+    <div style="width:52px;height:52px;border-radius:50%;background:var(--danger-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+      <i class="ti ti-trash" style="font-size:24px;color:var(--danger-t)"></i>
+    </div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:6px">Eliminar paciente</div>
+    <div style="font-size:14px;font-weight:600;color:var(--brand);margin-bottom:12px">${nombre}</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Se eliminarán <strong>${colocaciones} registro${colocaciones!==1?'s':''}</strong> del historial.</div>
+    ${activo?`<div style="font-size:12px;padding:8px 12px;background:var(--warn-bg);color:var(--warn-t);border-radius:var(--r);margin-bottom:12px"><i class="ti ti-alert-triangle"></i> Este paciente tiene un equipo activo — quedará libre al eliminar.</div>`:''}
+    <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Esta acción no se puede deshacer.</div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-danger" onclick="eliminarPaciente('${nombre.replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i>Sí, eliminar</button>
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+</div>`;
+}
+
+async function eliminarPaciente(nombre){
+  try{
+    await api.del('/pacientes/'+encodeURIComponent(nombre));
+    DB.registros.filter(r=>r.nombre===nombre&&r.estatus==='Activo'&&r.maquina).forEach(r=>{
+      const m=DB.maquinas.find(x=>x.id===r.maquina);
+      if(m)m.paciente_actual=null;
+    });
+    DB.registros=DB.registros.filter(r=>r.nombre!==nombre);
+    delete DB.pacientes_master[nombre];
+    showToast('Paciente eliminado');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas})[VIEW]?.();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ELIMINAR MÁQUINA
+// ══════════════════════════════════════════════════════════════════════════════
+function confirmarEliminarMaquina(id){
+  const m=DB.maquinas.find(x=>x.id===id);if(!m)return;
+  const usos=DB.registros.filter(r=>r.maquina===id).length;
+  const activo=DB.registros.find(r=>r.maquina===id&&r.estatus==='Activo');
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal" style="max-width:460px">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div style="text-align:center;padding:8px 0 16px">
+    <div style="width:52px;height:52px;border-radius:50%;background:var(--danger-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+      <i class="ti ti-device-laptop-medical" style="font-size:24px;color:var(--danger-t)"></i>
+    </div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:6px">Eliminar equipo</div>
+    <div style="font-size:14px;font-weight:600;color:var(--brand);margin-bottom:4px">${m.nombre}</div>
+    <div style="font-size:12px;font-family:monospace;color:var(--text3);margin-bottom:12px">Serial: ${m.serial||'—'}</div>
+    ${usos>0?`<div style="font-size:13px;color:var(--text2);margin-bottom:8px">Aparece en <strong>${usos} registro${usos!==1?'s':''}</strong> histórico${usos!==1?'s':''}. Esos registros quedarán sin máquina asignada.</div>`:''}
+    ${activo?`<div style="font-size:12px;padding:8px 12px;background:var(--danger-bg);color:var(--danger-t);border-radius:var(--r);margin-bottom:12px"><i class="ti ti-alert-triangle"></i> <strong>${activo.nombre}</strong> tiene este equipo activo ahora.</div>`:''}
+    <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Esta acción no se puede deshacer.</div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-danger" onclick="eliminarMaquina('${id}')"><i class="ti ti-trash"></i>Sí, eliminar</button>
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+</div>`;
+}
+
+async function eliminarMaquina(id){
+  try{
+    await api.del('/maquinas/'+id);
+    DB.registros.filter(r=>r.maquina===id&&r.estatus==='Activo').forEach(r=>r.estatus='Desactivado');
+    DB.registros.filter(r=>r.maquina===id).forEach(r=>r.maquina='');
+    DB.maquinas=DB.maquinas.filter(x=>x.id!==id);
+    showToast('Máquina eliminada');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas})[VIEW]?.();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PRODUCTOS — helpers dinámicos
+// ══════════════════════════════════════════════════════════════════════════════
+function addProductoRow(containerId, prod={desc:'',qty:1,precio:0}){
+  const container=document.getElementById(containerId);if(!container)return;
+  const div=document.createElement('div');
+  div.className='prod-row';
+  div.innerHTML=`
+    <input type="text" placeholder="Descripción del producto" value="${prod.desc}" oninput="updateProdTotal('${containerId}')">
+    <input type="number" placeholder="Cant." value="${prod.qty}" min="1" oninput="updateProdTotal('${containerId}')">
+    <input type="number" placeholder="Precio unit." value="${prod.precio}" min="0" oninput="updateProdTotal('${containerId}')">
+    <button type="button" class="btn btn-sm btn-danger" style="padding:4px 7px" onclick="this.parentElement.remove();updateProdTotal('${containerId}')"><i class="ti ti-x"></i></button>`;
+  container.appendChild(div);
+  updateProdTotal(containerId);
+}
+function updateProdTotal(containerId){
+  const container=document.getElementById(containerId);if(!container)return;
+  const totalId=containerId.replace('-list','-total').replace('productos','prod');
+  const totalEl=document.getElementById(totalId);
+  let total=0;
+  container.querySelectorAll('.prod-row').forEach(row=>{
+    const inputs=row.querySelectorAll('input');
+    const qty=parseFloat(inputs[1].value)||0;
+    const precio=parseFloat(inputs[2].value)||0;
+    total+=qty*precio;
+  });
+  if(totalEl) totalEl.textContent=total>0?`Subtotal productos: ${fmt(total)}`:'';
+}
+function getProductosFromList(containerId){
+  const container=document.getElementById(containerId);if(!container)return[];
+  const prods=[];
+  container.querySelectorAll('.prod-row').forEach(row=>{
+    const inputs=row.querySelectorAll('input');
+    const desc=inputs[0].value.trim();
+    const qty=parseFloat(inputs[1].value)||1;
+    const precio=parseFloat(inputs[2].value)||0;
+    if(desc) prods.push({desc,qty,precio});
+  });
+  return prods;
+}
+function renderProductosEnHistorial(productos){
+  if(!productos||!productos.length) return '';
+  const total=productos.reduce((s,p)=>s+(p.qty*p.precio),0);
+  return`<div style="margin-top:6px;padding:8px 10px;background:var(--bg2);border-radius:var(--r);font-size:12px">
+    <div style="font-weight:700;color:var(--text2);margin-bottom:4px">Productos utilizados:</div>
+    ${productos.map(p=>`<div style="display:flex;justify-content:space-between;padding:2px 0"><span>${p.desc} × ${p.qty}</span><span style="font-weight:600">${fmt(p.qty*p.precio)}</span></div>`).join('')}
+    ${total>0?`<div style="border-top:0.5px solid var(--border);margin-top:4px;padding-top:4px;font-weight:700;display:flex;justify-content:space-between"><span>Subtotal productos</span><span>${fmt(total)}</span></div>`:''}
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FOTOS — helpers base64
+// ══════════════════════════════════════════════════════════════════════════════
+function agregarFotosSection(modalPrefix){
+  // Called after modal opens — injects fotos section if container exists
+}
+function addFotoPreview(input, previewId){
+  const preview=document.getElementById(previewId);if(!preview)return;
+  const files=Array.from(input.files);
+  files.forEach(file=>{
+    if(!file.type.startsWith('image/'))return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=document.createElement('img');
+      img.src=e.target.result;
+      img.className='foto-thumb';
+      img.dataset.b64=e.target.result;
+      img.onclick=()=>abrirLightbox(e.target.result);
+      preview.appendChild(img);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function getFotosFromPreview(previewId){
+  const preview=document.getElementById(previewId);if(!preview)return[];
+  return Array.from(preview.querySelectorAll('img')).map(img=>img.dataset.b64).filter(Boolean);
+}
+function abrirLightbox(src){
+  const lb=document.createElement('div');
+  lb.className='lightbox';
+  lb.innerHTML=`<img src="${src}" alt="Foto ampliada">`;
+  lb.onclick=()=>lb.remove();
+  document.body.appendChild(lb);
+}
+function renderGaleriaFotos(fotos){
+  if(!fotos||!fotos.length) return '';
+  return`<div style="margin-top:6px">
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">Fotos:</div>
+    <div class="foto-thumbs">${fotos.map(f=>`<img src="${f}" class="foto-thumb" onclick="abrirLightbox('${f.replace(/'/g,"\\'")}')"/>`).join('')}</div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UBICACIÓN GOOGLE MAPS
+// ══════════════════════════════════════════════════════════════════════════════
+function renderMapsLink(ubicacion){
+  if(!ubicacion) return '';
+  if(ubicacion.startsWith('http')){
+    return`<a href="${ubicacion}" target="_blank" title="Ver en Maps" style="color:var(--brand);text-decoration:none">📍</a>`;
+  }
+  return`<a href="https://maps.google.com/?q=${encodeURIComponent(ubicacion)}" target="_blank" style="font-size:11px;color:var(--brand)">📍 Ver en Maps</a>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GENERAR CONDUCE DE DESCARGO — print
+// ══════════════════════════════════════════════════════════════════════════════
+function generarConduce(registroId){
+  const reg=DB.registros.find(r=>r.id===registroId);
+  if(!reg){alert('Registro no encontrado.');return;}
+  const maq=reg.maquina?DB.maquinas.find(m=>m.id===reg.maquina):null;
+  const prods=reg.productos||[];
+  const totalProds=prods.reduce((s,p)=>s+(p.qty*p.precio),0);
+  let pa=document.getElementById('print-area');
+  if(!pa){pa=document.createElement('div');pa.id='print-area';document.body.appendChild(pa);}
+  pa.innerHTML=`
+<div class="print-header">
+  <div class="print-logo"><i class="ti ti-medical-cross" style="font-size:20px"></i></div>
+  <div>
+    <div class="print-title">DIPROMES</div>
+    <div class="print-sub">Conduce de Descargo #${reg.id} · ${fmtD(reg.fecha)}</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+<div class="print-section">
+  <div class="print-section-title">Datos del paciente</div>
+  <div class="print-row"><span>Nombre</span><span>${reg.nombre||'—'}</span></div>
+  <div class="print-row"><span>Cédula</span><span>${reg.cedula||'—'}</span></div>
+  <div class="print-row"><span>Teléfono</span><span>${reg.tel1||reg.tel2||'—'}</span></div>
+  <div class="print-row"><span>Dirección</span><span>${reg.direccion||'—'}</span></div>
+  <div class="print-row"><span>ARS / Seguro</span><span>${reg.ars||'—'}</span></div>
+</div>
+<div class="print-section">
+  <div class="print-section-title">Datos del equipo</div>
+  <div class="print-row"><span>Equipo</span><span>${maq?maq.nombre:'—'}</span></div>
+  <div class="print-row"><span>N° Serial</span><span>${maq?maq.serial||'—':'—'}</span></div>
+  <div class="print-row"><span>Área de lesión</span><span>${reg.lesion||'—'}</span></div>
+  <div class="print-row"><span>Fecha de entrega</span><span>${fmtD(reg.fecha)}</span></div>
+  <div class="print-row"><span>Fecha de retiro</span><span>${reg.fecha_retiro?fmtD(reg.fecha_retiro):'En uso'}</span></div>
+  <div class="print-row"><span>Colocación</span><span>${reg.motivo||'—'}</span></div>
+</div>
+</div>
+
+${prods.length?`
+<div class="print-section" style="margin-top:16px">
+  <div class="print-section-title">Productos utilizados</div>
+  <table class="print-prod-table">
+    <thead><tr><th>Descripción</th><th style="text-align:center">Cant.</th><th style="text-align:right">Precio unit.</th><th style="text-align:right">Subtotal</th></tr></thead>
+    <tbody>
+      ${prods.map(p=>`<tr><td>${p.desc}</td><td style="text-align:center">${p.qty}</td><td style="text-align:right">${fmt(p.precio)}</td><td style="text-align:right">${fmt(p.qty*p.precio)}</td></tr>`).join('')}
+      <tr style="font-weight:700;background:#f9f9f9"><td colspan="3" style="text-align:right">Subtotal productos</td><td style="text-align:right">${fmt(totalProds)}</td></tr>
+    </tbody>
+  </table>
+</div>`:''}
+
+<div class="print-section" style="margin-top:16px;border-top:2px solid #7B1A1A;padding-top:12px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:14px;font-weight:700">Total del conduce</div>
+    <div style="font-size:22px;font-weight:700;color:#7B1A1A">${fmt(reg.facturacion||0)}</div>
+  </div>
+  ${totalProds>0?`<div style="font-size:11px;color:#666;text-align:right">Subtotal productos: ${fmt(totalProds)} (incluidos aparte)</div>`:''}
+</div>
+
+${reg.notas?`<div class="print-section"><div class="print-section-title">Observaciones</div><div style="font-size:12px">${reg.notas}</div></div>`:''}
+
+<div class="print-firmas">
+  <div class="print-firma">
+    <div class="print-firma-line"></div>
+    <div class="print-firma-label">Firma del médico responsable</div>
+  </div>
+  <div class="print-firma">
+    <div class="print-firma-line"></div>
+    <div class="print-firma-label">Firma del paciente / familiar</div>
+  </div>
+</div>`;
+  window.print();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ELIMINAR COLOCACIÓN
+// ══════════════════════════════════════════════════════════════════════════════
+function eliminarColocacion(registroId){
+  const reg=DB.registros.find(r=>r.id===registroId);
+  if(!reg){alert('Registro no encontrado.');return;}
+  const maqLabel=reg.maquina?getMaquinaLabel(reg.maquina):'';
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal" style="max-width:460px">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div style="text-align:center;padding:8px 0 16px">
+    <div style="width:52px;height:52px;border-radius:50%;background:var(--danger-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+      <i class="ti ti-trash" style="font-size:24px;color:var(--danger-t)"></i>
+    </div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:6px">Eliminar colocación</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:6px">${reg.nombre}</div>
+    <div style="font-size:12px;font-family:monospace;color:var(--text3);margin-bottom:12px">${reg.id} · ${fmtD(reg.fecha)}${maqLabel?' · '+maqLabel:''}</div>
+    ${reg.estatus==='Activo'?`<div style="font-size:12px;padding:8px 12px;background:var(--warn-bg);color:var(--warn-t);border-radius:var(--r);margin-bottom:12px"><i class="ti ti-alert-triangle"></i> Colocación activa — el equipo quedará libre al eliminar.</div>`:''}
+    <div style="font-size:12px;color:var(--text3);margin-bottom:20px">¿Eliminar esta colocación? Esta acción no se puede deshacer.</div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-danger" onclick="confirmarEliminarColocacion('${registroId}')"><i class="ti ti-trash"></i>Sí, eliminar</button>
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+</div>`;
+}
+
+async function confirmarEliminarColocacion(registroId){
+  const reg=DB.registros.find(r=>r.id===registroId);
+  if(!reg)return;
+  try{
+    await api.del('/registros/'+registroId);
+    if(reg.estatus==='Activo'&&reg.maquina){
+      const m=DB.maquinas.find(x=>x.id===reg.maquina);
+      if(m)m.paciente_actual=null;
+    }
+    DB.registros=DB.registros.filter(r=>r.id!==registroId);
+    showToast('Colocación eliminada');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas})[VIEW]?.();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SISTEMA DE LOGIN
+// ══════════════════════════════════════════════════════════════════════════════
+function checkSession(){
+  const sess=sessionStorage.getItem('meditrack_session');
+  if(sess){
+    try{
+      const s=JSON.parse(sess);
+      document.querySelector('.app').style.display='flex';
+      mostrarTopbarUsuario(s.nombre, s.rol);
+      return true;
+    }catch(e){}
+  }
+  document.getElementById('login-screen').style.display='flex';
+  return false;
+}
+
+async function login(){
+  const user=document.getElementById('login-user').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  try{
+    const found=await api.post('/auth/login',{user,pass});
+    if(!found.ok){document.getElementById('login-error').style.display='';return;}
+    sessionStorage.setItem('meditrack_session',JSON.stringify({user:found.user,nombre:found.nombre,rol:found.rol}));
+    document.getElementById('login-screen').style.display='none';
+    document.querySelector('.app').style.display='flex';
+    mostrarTopbarUsuario(found.nombre,found.rol);
+    go('dashboard');
+  }catch(e){document.getElementById('login-error').style.display='';}
+}
+
+function logout(){
+  if(!confirm('¿Cerrar sesión?')) return;
+  sessionStorage.removeItem('meditrack_session');
+  document.getElementById('login-screen').style.display='flex';
+  document.querySelector('.app').style.display='none';
+  document.getElementById('login-user').value='';
+  document.getElementById('login-pass').value='';
+}
+
+function getSesion(){
+  try{ return JSON.parse(sessionStorage.getItem('meditrack_session')||'{}'); }catch(e){ return {}; }
+}
+
+function mostrarTopbarUsuario(nombre, rol){
+  let el=document.getElementById('topbar-user');
+  if(!el){
+    el=document.createElement('div');
+    el.id='topbar-user';
+    el.style.cssText='display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)';
+    document.querySelector('.topbar').appendChild(el);
+  }
+  const adminBadge=rol==='admin'?`<span class="badge badge-brand" style="font-size:10px">Admin</span>`:'';
+  el.innerHTML=`${adminBadge}<span style="font-weight:600;color:var(--text)">${nombre}</span><button class="btn btn-sm btn-ghost" onclick="logout()" title="Cerrar sesión"><i class="ti ti-logout" style="font-size:14px"></i></button>`;
+  // Mostrar sección Usuarios solo a admins
+  document.querySelectorAll('.admin-only').forEach(e=>e.style.display=rol==='admin'?'':'none');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GESTIÓN DE USUARIOS
+// ══════════════════════════════════════════════════════════════════════════════
+function nextUID(){
+  const nums=DB.usuarios.map(u=>parseInt(u.id.replace('U',''))||0);
+  return 'U'+String(Math.max(0,...nums)+1).padStart(3,'0');
+}
+
+function renderUsuarios(){
+  const sesion=getSesion();
+  if(sesion.rol!=='admin'){
+    document.getElementById('content').innerHTML=`<div class="empty-state"><i class="ti ti-lock"></i><p>Solo los administradores pueden gestionar usuarios.</p></div>`;
+    return;
+  }
+  document.getElementById('content').innerHTML=`
+<div class="card" style="margin-bottom:0">
+  <div class="card-title"><i class="ti ti-users-group" style="font-size:13px;vertical-align:-1px;margin-right:5px"></i>Usuarios del sistema</div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr>
+        <th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th style="width:120px">Acciones</th>
+      </tr></thead>
+      <tbody>
+        ${DB.usuarios.map(u=>`
+        <tr>
+          <td><code style="background:var(--bg2);padding:2px 6px;border-radius:4px;font-size:12px">${u.user}</code></td>
+          <td style="font-weight:500">${u.nombre}</td>
+          <td>${u.rol==='admin'?`<span class="badge badge-brand">Admin</span>`:`<span class="badge badge-info">Usuario</span>`}</td>
+          <td>${u.activo!==false?`<span class="badge badge-ok">Activo</span>`:`<span class="badge badge-gray">Inactivo</span>`}</td>
+          <td>
+            <div style="display:flex;gap:4px">
+              <button class="btn btn-sm btn-ghost" onclick="editarUsuario('${u.id}')" title="Editar"><i class="ti ti-pencil"></i></button>
+              ${u.id==='U001'?`<button class="btn btn-sm btn-ghost" style="opacity:.3;cursor:not-allowed" title="No se puede eliminar el admin principal"><i class="ti ti-trash"></i></button>`:`<button class="btn btn-sm btn-ghost" style="color:var(--danger-t)" onclick="eliminarUsuario('${u.id}')" title="Eliminar"><i class="ti ti-trash"></i></button>`}
+            </div>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+</div>`;
+}
+
+function abrirNuevoUsuario(){
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal" style="max-width:480px">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title"><i class="ti ti-user-plus" style="margin-right:8px;color:var(--brand)"></i>Nuevo Usuario</div>
+  <div class="form-grid">
+    <div class="form-group">
+      <label>Nombre completo</label>
+      <input type="text" id="nu-nombre" placeholder="Ej. Dr. García">
+    </div>
+    <div class="form-group">
+      <label>Usuario (login)</label>
+      <input type="text" id="nu-user" placeholder="Ej. dgarcia" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="nu-pass" placeholder="Mínimo 4 caracteres" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label>Rol</label>
+      <select id="nu-rol">
+        <option value="usuario">Usuario</option>
+        <option value="admin">Administrador</option>
+      </select>
+    </div>
+  </div>
+  <div id="nu-error" style="font-size:12px;color:var(--danger-t);margin-bottom:10px;display:none"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarNuevoUsuario()"><i class="ti ti-check"></i>Crear usuario</button>
+  </div>
+</div>
+</div>`;
+}
+
+async function guardarNuevoUsuario(){
+  const nombre=document.getElementById('nu-nombre').value.trim();
+  const user=document.getElementById('nu-user').value.trim().toLowerCase();
+  const pass=document.getElementById('nu-pass').value;
+  const rol=document.getElementById('nu-rol').value;
+  const errEl=document.getElementById('nu-error');
+  if(!nombre||!user||!pass){ errEl.textContent='Completa todos los campos.'; errEl.style.display=''; return; }
+  if(pass.length<4){ errEl.textContent='La contraseña debe tener al menos 4 caracteres.'; errEl.style.display=''; return; }
+  try{
+    const creado=await api.post('/usuarios',{user,pass,nombre,rol,activo:true});
+    DB.usuarios.push(creado);
+    showToast('Usuario creado');
+    closeModal();renderUsuarios();
+  }catch(e){errEl.textContent='Error: '+(e.message||'No se pudo crear el usuario.');errEl.style.display='';}
+}
+
+function editarUsuario(uid){
+  const u=DB.usuarios.find(x=>x.id===uid);
+  if(!u) return;
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal" style="max-width:480px">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title"><i class="ti ti-user-edit" style="margin-right:8px;color:var(--brand)"></i>Editar Usuario</div>
+  <div class="form-grid">
+    <div class="form-group">
+      <label>Nombre completo</label>
+      <input type="text" id="eu-nombre" value="${u.nombre}">
+    </div>
+    <div class="form-group">
+      <label>Usuario (login)</label>
+      <input type="text" id="eu-user" value="${u.user}" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Nueva contraseña <span style="font-weight:400;color:var(--text3)">(dejar vacío para no cambiar)</span></label>
+      <input type="password" id="eu-pass" placeholder="••••••••" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label>Rol</label>
+      <select id="eu-rol" ${u.id==='U001'?'disabled':''}>
+        <option value="usuario" ${u.rol==='usuario'?'selected':''}>Usuario</option>
+        <option value="admin" ${u.rol==='admin'?'selected':''}>Administrador</option>
+      </select>
+    </div>
+    <div class="form-group span2">
+      <label>Estado</label>
+      <select id="eu-activo" ${u.id==='U001'?'disabled':''}>
+        <option value="1" ${u.activo!==false?'selected':''}>Activo</option>
+        <option value="0" ${u.activo===false?'selected':''}>Inactivo</option>
+      </select>
+    </div>
+  </div>
+  <div id="eu-error" style="font-size:12px;color:var(--danger-t);margin-bottom:10px;display:none"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarEditUsuario('${uid}')"><i class="ti ti-check"></i>Guardar cambios</button>
+  </div>
+</div>
+</div>`;
+}
+
+async function guardarEditUsuario(uid){
+  const u=DB.usuarios.find(x=>x.id===uid);
+  if(!u) return;
+  const nombre=document.getElementById('eu-nombre').value.trim();
+  const user=document.getElementById('eu-user').value.trim().toLowerCase();
+  const pass=document.getElementById('eu-pass').value;
+  const rol=document.getElementById('eu-rol').value||u.rol;
+  const activo=document.getElementById('eu-activo').value!=='0';
+  const errEl=document.getElementById('eu-error');
+  if(!nombre||!user){ errEl.textContent='Nombre y usuario son obligatorios.'; errEl.style.display=''; return; }
+  if(pass&&pass.length<4){ errEl.textContent='La contraseña debe tener al menos 4 caracteres.'; errEl.style.display=''; return; }
+  try{
+    const upd={nombre,user,rol,activo};
+    if(pass) upd.pass=pass;
+    const updated=await api.put('/usuarios/'+uid,upd);
+    Object.assign(u,updated);
+    showToast('Usuario actualizado');
+    closeModal();renderUsuarios();
+  }catch(e){errEl.textContent='Error: '+(e.message||'No se pudo actualizar.');errEl.style.display='';}
+}
+
+function eliminarUsuario(uid){
+  const u=DB.usuarios.find(x=>x.id===uid);
+  if(!u) return;
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal" style="max-width:420px">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div style="text-align:center;padding:8px 0 16px">
+    <div style="width:52px;height:52px;border-radius:50%;background:var(--danger-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+      <i class="ti ti-user-x" style="font-size:24px;color:var(--danger-t)"></i>
+    </div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:6px">Eliminar usuario</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:4px">${u.nombre}</div>
+    <div style="font-size:12px;font-family:monospace;color:var(--text3);margin-bottom:16px">@${u.user}</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Esta acción no se puede deshacer.</div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-danger" onclick="confirmarEliminarUsuario('${uid}')"><i class="ti ti-trash"></i>Sí, eliminar</button>
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+</div>`;
+}
+
+async function confirmarEliminarUsuario(uid){
+  try{
+    await api.del('/usuarios/'+uid);
+    DB.usuarios=DB.usuarios.filter(u=>u.id!==uid);
+    showToast('Usuario eliminado');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();renderUsuarios();
+}
+
+// ══ INIT ══
+initDB().then(()=>{ if(checkSession()) go('dashboard'); });
+</script>
+</body>
+</html>
