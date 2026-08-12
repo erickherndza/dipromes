@@ -735,6 +735,17 @@ SEED_ARS = [
 ]
 
 
+def apply_migrations():
+    """ALTER TABLE migrations that db.create_all() cannot handle."""
+    try:
+        with db.engine.connect() as conn:
+            # Widen pass column from VARCHAR(100) to TEXT for password hashes
+            conn.execute(db.text("ALTER TABLE usuarios ALTER COLUMN pass TYPE TEXT"))
+            conn.commit()
+    except Exception:
+        pass  # Table doesn't exist yet (create_all will handle it), or already TEXT
+
+
 def seed_if_empty():
     if Maquina.query.count() == 0:
         for m in SEED_MAQUINAS:

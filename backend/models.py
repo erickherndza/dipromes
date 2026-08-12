@@ -97,7 +97,7 @@ class Usuario(db.Model):
     __tablename__ = 'usuarios'
     id = db.Column(db.String(10), primary_key=True)
     user = db.Column(db.String(50), unique=True, nullable=False)
-    pass_ = db.Column('pass', db.String(100), nullable=False)
+    pass_ = db.Column('pass', db.Text, nullable=False)
     nombre = db.Column(db.String(200), nullable=False)
     rol = db.Column(db.String(20), default='usuario')
     activo = db.Column(db.Boolean, default=True)
