@@ -6,9 +6,8 @@ from functools import wraps
 
 from flask import Flask, request, jsonify, send_from_directory, Response, session
 from flask_cors import CORS
-from flask_talisman import Talisman
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from collections import defaultdict
+from time import time
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from models import db, Maquina, Registro, Usuario, PacienteMaster, Config
@@ -30,25 +29,30 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "https://dipromes.onrender.com")
 CORS(app, origins=[ALLOWED_ORIGIN] if IS_PROD else ["*"], supports_credentials=True)
 
-# ─── HTTP security headers ───────────────────────────────────────────────────
-# CSP is disabled because the single-file frontend uses inline scripts/styles.
-# Enable it with nonces when migrating to React+Vite.
-Talisman(
-    app,
-    force_https=IS_PROD,
-    strict_transport_security=IS_PROD,
-    content_security_policy=False,
-    referrer_policy="strict-origin-when-cross-origin",
-    frame_options="DENY",
-)
+# ─── HTTP security headers (no external lib needed) ──────────────────────────
+@app.after_request
+def add_security_headers(resp):
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if IS_PROD:
+        resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return resp
 
-# ─── Rate limiting ───────────────────────────────────────────────────────────
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=[],  # no global limit; applied per-route
-    storage_uri="memory://",  # ponytail: upgrade to Redis when > 1 worker matters
-)
+# ─── Rate limiting — simple in-memory token bucket per IP ────────────────────
+# ponytail: replace with Redis-backed solution when scaling beyond 1 dyno
+_login_attempts: dict = defaultdict(list)
+_RATE_WINDOW = 60   # seconds
+_RATE_MAX    = 10   # attempts per window
+
+def _check_rate_limit(ip: str) -> bool:
+    now = time()
+    attempts = [t for t in _login_attempts[ip] if now - t < _RATE_WINDOW]
+    _login_attempts[ip] = attempts
+    if len(attempts) >= _RATE_MAX:
+        return False
+    _login_attempts[ip].append(now)
+    return True
 
 # ─── Database ────────────────────────────────────────────────────────────────
 _db_url = os.environ.get(
@@ -127,8 +131,9 @@ def _is_hashed(pw: str) -> bool:
 
 
 @app.route("/api/auth/login", methods=["POST"])
-@limiter.limit("10 per minute")
 def auth_login():
+    if not _check_rate_limit(request.remote_addr):
+        return jsonify({"ok": False, "error": "Demasiados intentos. Espera un momento."}), 429
     d = request.json or {}
     u = Usuario.query.filter_by(user=d.get("user", ""), activo=True).first()
     if not u:
