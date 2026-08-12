@@ -449,8 +449,11 @@ def exportar_csv():
 
 @app.route("/api/exportar/registros/pdf")
 def exportar_pdf():
-    regs, maquinas = _all_data()
-    buf = generate_pdf(regs, maquinas)
+    try:
+        regs, maquinas = _all_data()
+        buf = generate_pdf(regs, maquinas)
+    except Exception:
+        return jsonify({"error": "PDF no disponible en este plan"}), 503
     return Response(
         buf.read(),
         mimetype="application/pdf",

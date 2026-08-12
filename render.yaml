@@ -3,7 +3,7 @@ services:
     name: dipromes
     env: python
     plan: free
-    buildCommand: pip install -r backend/requirements.txt
+    buildCommand: pip install --no-cache-dir -r backend/requirements.txt
     startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --timeout 60
     envVars:
       - key: DATABASE_URL
