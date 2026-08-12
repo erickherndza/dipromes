@@ -1,4 +1,4 @@
-"""Export helpers: Excel, CSV, PDF."""
+"""Export helpers: Excel, CSV, PDF, Consent HTML."""
 import io
 import csv
 from datetime import datetime
@@ -290,3 +290,122 @@ def generate_pdf(registros, maquinas, titulo="Registro de Pacientes"):
     doc.build(story)
     buf.seek(0)
     return buf
+
+
+# ── Consent HTML (printable, no extra deps) ──────────────────────────────────
+def consent_html(c: dict) -> str:
+    """Return a self-contained printable HTML page for a consent record."""
+    def _line(val: str, width: str = "260px") -> str:
+        content = val if val else "&nbsp;" * 30
+        return (
+            f'<span style="display:inline-block;min-width:{width};'
+            f'border-bottom:1px solid #333;padding-bottom:1px;'
+            f'font-weight:{\"600\" if val else \"400\"}">{content}</span>'
+        )
+
+    fecha = c.get("fecha_firma", "")
+    dd, mm, yyyy = ("", "", "")
+    if fecha and len(fecha) == 10:
+        yyyy, mm, dd = fecha.split("-")
+
+    edad_str = f"{c['edad']} años" if c.get("edad") else ""
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Consentimiento Informado — {c.get('nombre','')}</title>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box}}
+  body{{font-family:'Times New Roman',serif;font-size:11pt;color:#1a1a1a;background:#fff;padding:18mm 20mm}}
+  .header{{text-align:center;margin-bottom:14px;border-bottom:2px solid #7B1A1A;padding-bottom:10px}}
+  .logo{{font-size:18pt;font-weight:700;color:#7B1A1A;letter-spacing:1px}}
+  .info{{font-size:9pt;color:#444;margin-top:3px;line-height:1.5}}
+  h1{{text-align:center;font-size:13pt;color:#7B1A1A;text-transform:uppercase;letter-spacing:1px;margin:14px 0 4px}}
+  h2{{font-size:10pt;color:#7B1A1A;text-transform:uppercase;letter-spacing:.5px;border-left:3px solid #7B1A1A;padding-left:7px;margin:14px 0 7px}}
+  .row{{margin-bottom:6px;font-size:10.5pt;line-height:1.8}}
+  .lbl{{font-weight:600;margin-right:4px}}
+  ul{{padding-left:20px;margin:4px 0}}
+  li{{margin-bottom:3px;font-size:10.5pt}}
+  p{{font-size:10.5pt;margin-bottom:4px;line-height:1.6}}
+  .firma-row{{display:flex;gap:30px;margin-top:8px}}
+  .firma-box{{flex:1}}
+  .firma-line{{border-bottom:1px solid #333;margin-bottom:4px;height:28px}}
+  .firma-lbl{{font-size:9.5pt;color:#444}}
+  .footer{{margin-top:16px;border-top:1px solid #ccc;padding-top:6px;text-align:center;font-size:8.5pt;color:#777}}
+  @media print{{body{{padding:10mm 14mm}}@page{{size:A4 portrait;margin:10mm 14mm}}}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">DIPROMES</div>
+  <div class="info">
+    Calle 6 Santo Tomás de Aquino No. 55 · Zona Universitaria, Santo Domingo, Rep. Dom.<br>
+    RNC: 131950965 &nbsp;|&nbsp; 829-715-6235 · 829-630-1776 · 829-902-3716 · 809-706-4792
+  </div>
+</div>
+
+<h1>Consentimiento Informado<br><span style="font-size:10pt">Terapia VAC</span></h1>
+
+<h2>Datos del Paciente</h2>
+<div class="row"><span class="lbl">Nombre:</span>{_line(c.get('nombre',''),'280px')} &nbsp; <span class="lbl">Cédula:</span>{_line(c.get('cedula',''),'160px')}</div>
+<div class="row"><span class="lbl">Edad:</span>{_line(edad_str,'70px')} &nbsp; <span class="lbl">Dirección:</span>{_line(c.get('direccion',''),'220px')} &nbsp; <span class="lbl">Tel.:</span>{_line(c.get('telefono',''),'130px')}</div>
+
+<h2>Indicación Médica</h2>
+<div class="row"><span class="lbl">Nombre del médico:</span>{_line(c.get('medico',''),'200px')} &nbsp; <span class="lbl">Centro de salud:</span>{_line(c.get('centro_salud',''),'185px')}</div>
+
+<h2>Información del Procedimiento</h2>
+<p>He recibido una explicación clara sobre la <strong>Terapia VAC</strong>. Se me ha explicado y entiendo en qué consiste el tratamiento con el objetivo de:</p>
+<ul>
+  <li>Ayudar a la cicatrización</li>
+  <li>Eliminar secreciones o líquidos acumulados</li>
+  <li>Disminuir el riesgo de infección</li>
+  <li>Favorecer la formación de tejido sano</li>
+</ul>
+<p style="margin-top:6px">También comprendo que este procedimiento será realizado por personal capacitado de <strong>Dipromes Terapias VAC</strong>, siguiendo las indicaciones médicas correspondientes y que los beneficios esperados van a depender de la fisiopatología del paciente y su lesión.</p>
+
+<h2>Posibles Riesgos y Molestias</h2>
+<p>Se me ha explicado que pueden presentarse algunas molestias o situaciones durante el tratamiento, tales como:</p>
+<ul>
+  <li>Dolor o incomodidad en la zona tratada</li>
+  <li>Irritación de la piel</li>
+  <li>Sangrado leve</li>
+  <li>Necesidad de ajustes o cambios en el tratamiento</li>
+</ul>
+
+<h2>Mis Responsabilidades como Paciente</h2>
+<p>Me comprometo a:</p>
+<ul>
+  <li>Seguir las indicaciones del personal de salud</li>
+  <li>No manipular el equipo sin autorización</li>
+  <li>Informar cualquier molestia, dolor o cambio en mi herida</li>
+  <li>Asistir a las citas y seguimientos indicados</li>
+</ul>
+
+<h2>Uso de Información y Datos</h2>
+<p>Autorizo a <strong>Dipromes Terapias VAC</strong> a utilizar mis datos personales y clínicos únicamente para fines médicos, administrativos y de seguimiento de mi tratamiento.</p>
+
+<h2>Declaración de Consentimiento</h2>
+<p>Declaro que:</p>
+<ul>
+  <li>He recibido información clara, suficiente y comprensible sobre el procedimiento.</li>
+  <li>Estoy de acuerdo con lo que se ha explicado y estoy consciente de lo que significa el tratamiento.</li>
+  <li>Entiendo los beneficios, riesgos y posibles complicaciones.</li>
+</ul>
+
+<h2>Firmas</h2>
+<div class="firma-row">
+  <div class="firma-box">
+    <div class="firma-line"></div>
+    <div class="firma-lbl">Firma del paciente o familiar autorizado</div>
+    <div style="margin-top:6px;font-size:10pt"><span class="lbl">Fecha:</span> {dd} / {mm} / {yyyy}</div>
+  </div>
+  <div class="firma-box">
+    <div class="firma-line"></div>
+    <div class="firma-lbl">Personal de salud (nombre y firma)</div>
+  </div>
+</div>
+
+<div class="footer">DIPROMES Terapias VAC · Calle 6 Santo Tomás de Aquino No. 55, Zona Universitaria, Santo Domingo · RNC 131950965</div>
+</body>
+</html>"""

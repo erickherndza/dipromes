@@ -121,6 +121,36 @@ class PacienteMaster(db.Model):
     datos = db.Column(db.Text, default='{}')
 
 
+class Consentimiento(db.Model):
+    __tablename__ = 'consentimientos'
+    id = db.Column(db.String(10), primary_key=True)
+    fecha_firma = db.Column(db.String(10), nullable=False)   # YYYY-MM-DD
+    nombre = db.Column(db.String(200), nullable=False)
+    cedula = db.Column(db.String(30), default='')
+    edad = db.Column(db.Integer, nullable=True)
+    direccion = db.Column(db.String(300), default='')
+    telefono = db.Column(db.String(100), default='')
+    medico = db.Column(db.String(200), default='')
+    centro_salud = db.Column(db.String(200), default='')
+    firmado = db.Column(db.Boolean, default=False)
+    notas = db.Column(db.Text, default='')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'fecha_firma': self.fecha_firma,
+            'nombre': self.nombre,
+            'cedula': self.cedula,
+            'edad': self.edad,
+            'direccion': self.direccion,
+            'telefono': self.telefono,
+            'medico': self.medico,
+            'centro_salud': self.centro_salud,
+            'firmado': self.firmado,
+            'notas': self.notas,
+        }
+
+
 class Config(db.Model):
     __tablename__ = 'config'
     key = db.Column(db.String(50), primary_key=True)

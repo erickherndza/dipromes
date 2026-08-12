@@ -10,7 +10,7 @@ from collections import defaultdict
 from time import time
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from models import db, Maquina, Registro, Usuario, PacienteMaster, Config
+from models import db, Maquina, Registro, Usuario, PacienteMaster, Config, Consentimiento
 from exportar import generate_excel, generate_csv, generate_pdf
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -628,6 +628,76 @@ def set_config(key):
         db.session.add(Config(key=key, value=payload))
     db.session.commit()
     return jsonify(json.loads(payload))
+
+
+# ─── Consentimientos ─────────────────────────────────────────────────────────
+
+def _next_cons_id():
+    nums = [int(c.id[1:]) for c in db.session.query(Consentimiento.id).all()
+            if c.id.startswith('C') and c.id[1:].isdigit()]
+    return f"C{max(nums, default=0) + 1:03d}"
+
+
+@app.route("/api/consentimientos")
+@login_required
+def list_consentimientos():
+    rows = Consentimiento.query.order_by(Consentimiento.fecha_firma.desc()).all()
+    return jsonify([c.to_dict() for c in rows])
+
+
+@app.route("/api/consentimientos", methods=["POST"])
+@login_required
+def create_consentimiento():
+    d = request.json or {}
+    c = Consentimiento(
+        id=_next_cons_id(),
+        fecha_firma=d.get("fecha_firma", ""),
+        nombre=d.get("nombre", ""),
+        cedula=d.get("cedula", ""),
+        edad=d.get("edad") or None,
+        direccion=d.get("direccion", ""),
+        telefono=d.get("telefono", ""),
+        medico=d.get("medico", ""),
+        centro_salud=d.get("centro_salud", ""),
+        firmado=bool(d.get("firmado", False)),
+        notas=d.get("notas", ""),
+    )
+    db.session.add(c)
+    db.session.commit()
+    return jsonify(c.to_dict()), 201
+
+
+@app.route("/api/consentimientos/<id>", methods=["PUT"])
+@login_required
+def update_consentimiento(id):
+    c = db.get_or_404(Consentimiento, id)
+    d = request.json or {}
+    for f in ("fecha_firma", "nombre", "cedula", "edad", "direccion",
+              "telefono", "medico", "centro_salud", "notas"):
+        if f in d:
+            setattr(c, f, d[f] or None if f == "edad" else d[f])
+    if "firmado" in d:
+        c.firmado = bool(d["firmado"])
+    db.session.commit()
+    return jsonify(c.to_dict())
+
+
+@app.route("/api/consentimientos/<id>", methods=["DELETE"])
+@login_required
+def delete_consentimiento(id):
+    c = db.get_or_404(Consentimiento, id)
+    db.session.delete(c)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/consentimientos/<id>/pdf")
+@login_required
+def consent_pdf(id):
+    c = db.get_or_404(Consentimiento, id)
+    from exportar import consent_html
+    html = consent_html(c.to_dict())
+    return Response(html, mimetype="text/html; charset=utf-8")
 
 
 # ─── DB management ────────────────────────────────────────────────────────────
