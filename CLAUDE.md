@@ -98,8 +98,12 @@ Gestión de usuarios del sistema. Solo visible para rol `admin`.
 | Rate limiting | In-memory: 10 req/min por IP en `/api/auth/login` |
 | CORS | Restringido a `ALLOWED_ORIGIN` en producción |
 | Headers | X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy |
+| CSP | `Content-Security-Policy` con nonce por request (`secrets.token_urlsafe`) — `before_request` genera nonce, `after_request` emite header, ruta `/` lo inyecta en el `<script>` inline |
+| SRI | Todos los recursos CDN (Tabler Icons @3.46.0, Leaflet CSS/JS, XLSX.js) tienen `integrity="sha384-..."` y `crossorigin="anonymous"` |
 | XSS | Función `esc()` en todo innerHTML del frontend |
 | Reset emergencia | `ADMIN_RESET_PASS` env var → eliminar después de usar |
+
+**Mozilla Observatory:** A+ (100/100) — auditado agosto 2026.
 
 **Variables de entorno requeridas en Render:**
 - `DATABASE_URL` — provista automáticamente por Render PostgreSQL
