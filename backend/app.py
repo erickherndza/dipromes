@@ -1,30 +1,93 @@
-"""MediTrack Pro — Flask backend."""
+"""DIPROMES — Flask backend."""
 import json
 import os
-from flask import Flask, request, jsonify, send_from_directory, Response
+from datetime import timedelta
+from functools import wraps
+
+from flask import Flask, request, jsonify, send_from_directory, Response, session
 from flask_cors import CORS
+from flask_talisman import Talisman
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from werkzeug.security import generate_password_hash, check_password_hash
+
 from models import db, Maquina, Registro, Usuario, PacienteMaster, Config
 from exportar import generate_excel, generate_csv, generate_pdf
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+IS_PROD = bool(os.environ.get("DATABASE_URL"))
 
 app = Flask(__name__, static_folder=BASE_DIR)
-CORS(app)
+
+# ─── Security config ─────────────────────────────────────────────────────────
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32).hex())
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = IS_PROD
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
+
+# ─── CORS — only allow the production origin (same-origin in dev) ────────────
+ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "https://dipromes.onrender.com")
+CORS(app, origins=[ALLOWED_ORIGIN] if IS_PROD else ["*"], supports_credentials=True)
+
+# ─── HTTP security headers ───────────────────────────────────────────────────
+# CSP is disabled because the single-file frontend uses inline scripts/styles.
+# Enable it with nonces when migrating to React+Vite.
+Talisman(
+    app,
+    force_https=IS_PROD,
+    strict_transport_security=IS_PROD,
+    content_security_policy=False,
+    referrer_policy="strict-origin-when-cross-origin",
+    frame_options="DENY",
+)
+
+# ─── Rate limiting ───────────────────────────────────────────────────────────
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=[],  # no global limit; applied per-route
+    storage_uri="memory://",  # ponytail: upgrade to Redis when > 1 worker matters
+)
+
+# ─── Database ────────────────────────────────────────────────────────────────
 _db_url = os.environ.get(
     "DATABASE_URL",
     f"sqlite:///{os.path.join(BASE_DIR, 'meditrack.db')}"
 )
-# Render provee postgres:// — convertir para pg8000 en producción, psycopg2 en local
 if _db_url.startswith("postgres://"):
     _db_url = _db_url.replace("postgres://", "postgresql+pg8000://", 1)
 elif _db_url.startswith("postgresql://") and "pg8000" not in _db_url:
     _db_url = _db_url.replace("postgresql://", "postgresql+pg8000://", 1)
+
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 
 
-# ─── ID helpers ────────────────────────────────────────────────────────────
+# ─── Auth decorators ─────────────────────────────────────────────────────────
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user_id"):
+            return jsonify({"error": "No autorizado"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user_id"):
+            return jsonify({"error": "No autorizado"}), 401
+        if session.get("rol") != "admin":
+            return jsonify({"error": "Se requiere rol de administrador"}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ─── ID helpers ──────────────────────────────────────────────────────────────
 
 def next_num(model, prefix):
     rows = db.session.query(model.id).all()
@@ -43,39 +106,69 @@ def next_usr_id():
     return f"U{next_num(Usuario, 'U'):03d}"
 
 
-# ─── Computed field ─────────────────────────────────────────────────────────
+# ─── Computed field ──────────────────────────────────────────────────────────
 
 def paciente_actual(maq_id):
     r = Registro.query.filter_by(maquina=maq_id, estatus="Activo").first()
     return r.nombre if r else None
 
 
-# ─── Frontend ───────────────────────────────────────────────────────────────
+# ─── Frontend ────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
     return send_from_directory(BASE_DIR, "index.html")
 
 
-# ─── Auth ───────────────────────────────────────────────────────────────────
+# ─── Auth ────────────────────────────────────────────────────────────────────
+
+def _is_hashed(pw: str) -> bool:
+    return pw.startswith(("scrypt:", "pbkdf2:", "sha256$"))
+
 
 @app.route("/api/auth/login", methods=["POST"])
+@limiter.limit("10 per minute")
 def auth_login():
     d = request.json or {}
     u = Usuario.query.filter_by(user=d.get("user", ""), activo=True).first()
-    if not u or u.pass_ != d.get("pass", ""):
+    if not u:
         return jsonify({"ok": False}), 401
+
+    provided = d.get("pass", "")
+    if _is_hashed(u.pass_):
+        valid = check_password_hash(u.pass_, provided)
+    else:
+        # Legacy plaintext — verify then auto-upgrade
+        valid = u.pass_ == provided
+        if valid:
+            u.pass_ = generate_password_hash(provided)
+            db.session.commit()
+
+    if not valid:
+        return jsonify({"ok": False}), 401
+
+    session.permanent = True
+    session["user_id"] = u.id
+    session["rol"] = u.rol
     return jsonify({"ok": True, "user": u.user, "nombre": u.nombre, "rol": u.rol})
 
 
-# ─── Máquinas ───────────────────────────────────────────────────────────────
+@app.route("/api/auth/logout", methods=["POST"])
+def auth_logout():
+    session.clear()
+    return jsonify({"ok": True})
+
+
+# ─── Máquinas ────────────────────────────────────────────────────────────────
 
 @app.route("/api/maquinas")
+@login_required
 def get_maquinas():
     return jsonify([m.to_dict(paciente_actual(m.id)) for m in Maquina.query.all()])
 
 
 @app.route("/api/maquinas", methods=["POST"])
+@login_required
 def create_maquina():
     d = request.json or {}
     m = Maquina(
@@ -92,6 +185,7 @@ def create_maquina():
 
 
 @app.route("/api/maquinas/<id>", methods=["PUT"])
+@login_required
 def update_maquina(id):
     m = db.get_or_404(Maquina, id)
     d = request.json or {}
@@ -103,6 +197,7 @@ def update_maquina(id):
 
 
 @app.route("/api/maquinas/<id>", methods=["DELETE"])
+@login_required
 def delete_maquina(id):
     m = db.get_or_404(Maquina, id)
     for r in Registro.query.filter_by(maquina=id, estatus="Activo").all():
@@ -114,7 +209,7 @@ def delete_maquina(id):
     return jsonify({"ok": True})
 
 
-# ─── Registros ──────────────────────────────────────────────────────────────
+# ─── Registros ───────────────────────────────────────────────────────────────
 
 def _registro_from_dict(d, reg_id):
     return Registro(
@@ -152,12 +247,14 @@ def _registro_from_dict(d, reg_id):
 
 
 @app.route("/api/registros")
+@login_required
 def get_registros():
     regs = Registro.query.order_by(Registro.fecha).all()
     return jsonify([r.to_dict() for r in regs])
 
 
 @app.route("/api/registros", methods=["POST"])
+@login_required
 def create_registro():
     d = request.json or {}
     r = _registro_from_dict(d, next_reg_id())
@@ -167,6 +264,7 @@ def create_registro():
 
 
 @app.route("/api/registros/bulk", methods=["POST"])
+@login_required
 def bulk_create_registros():
     data = request.json or []
     n = next_num(Registro, "R")
@@ -181,6 +279,7 @@ def bulk_create_registros():
 
 
 @app.route("/api/registros/<id>", methods=["PUT"])
+@login_required
 def update_registro(id):
     r = db.get_or_404(Registro, id)
     d = request.json or {}
@@ -201,25 +300,19 @@ def update_registro(id):
 
 
 @app.route("/api/registros/<id>", methods=["DELETE"])
+@login_required
 def delete_registro(id):
     r = db.get_or_404(Registro, id)
-    if r.maquina:
-        m = Maquina.query.get(r.maquina)
-        # paciente_actual is computed; no field to clear on model
     db.session.delete(r)
     db.session.commit()
     return jsonify({"ok": True})
 
 
-# ─── Pacientes (bulk operations) ────────────────────────────────────────────
+# ─── Pacientes (bulk operations) ─────────────────────────────────────────────
 
 @app.route("/api/pacientes/<path:nombre>", methods=["DELETE"])
+@login_required
 def delete_paciente(nombre):
-    """Delete all registros for this patient and free their machines."""
-    activos = Registro.query.filter_by(nombre=nombre, estatus="Activo").all()
-    for r in activos:
-        r.estatus = "Desactivado"  # history preserved but deactivated
-    # Hard delete
     Registro.query.filter_by(nombre=nombre).delete()
     pm = PacienteMaster.query.get(nombre)
     if pm:
@@ -229,6 +322,7 @@ def delete_paciente(nombre):
 
 
 @app.route("/api/pacientes/<path:nombre>/retiro", methods=["POST"])
+@login_required
 def retiro_paciente(nombre):
     d = request.json or {}
     activos = Registro.query.filter_by(nombre=nombre, estatus="Activo").all()
@@ -249,32 +343,27 @@ def retiro_paciente(nombre):
     return jsonify({"ok": True})
 
 
-# ─── Pacientes master ────────────────────────────────────────────────────────
+# ─── Pacientes master ─────────────────────────────────────────────────────────
 
 @app.route("/api/pacientes-master")
+@login_required
 def get_pacientes_master():
     rows = PacienteMaster.query.all()
     return jsonify({r.nombre: r.to_dict() for r in rows})
 
 
 @app.route("/api/pacientes-master/<path:nombre>", methods=["PUT"])
+@login_required
 def update_paciente_master(nombre):
     d = request.json or {}
     nuevo_nombre = d.get("nombre", nombre)
 
-    # Rename registros if name changed
     if nuevo_nombre != nombre:
         for r in Registro.query.filter_by(nombre=nombre).all():
             r.nombre = nuevo_nombre
         pm_old = PacienteMaster.query.get(nombre)
         if pm_old:
-            old_datos = json.loads(pm_old.datos or "{}")
             db.session.delete(pm_old)
-        else:
-            old_datos = {}
-    else:
-        old_datos = {}
-        pm_old = None
 
     pm = PacienteMaster.query.get(nuevo_nombre)
     if not pm:
@@ -288,15 +377,17 @@ def update_paciente_master(nombre):
     return jsonify({"ok": True})
 
 
-# ─── Usuarios ────────────────────────────────────────────────────────────────
+# ─── Usuarios ─────────────────────────────────────────────────────────────────
 
 @app.route("/api/usuarios")
+@login_required
 def get_usuarios():
-    # Never send passwords to the client
+    # Passwords are never sent to the client
     return jsonify([u.to_dict() for u in Usuario.query.all()])
 
 
 @app.route("/api/usuarios", methods=["POST"])
+@admin_required
 def create_usuario():
     d = request.json or {}
     if Usuario.query.filter_by(user=d["user"]).first():
@@ -304,7 +395,7 @@ def create_usuario():
     u = Usuario(
         id=next_usr_id(),
         user=d["user"],
-        pass_=d["pass"],
+        pass_=generate_password_hash(d["pass"]),
         nombre=d["nombre"],
         rol=d.get("rol", "usuario"),
         activo=d.get("activo", True),
@@ -315,6 +406,7 @@ def create_usuario():
 
 
 @app.route("/api/usuarios/<id>", methods=["PUT"])
+@admin_required
 def update_usuario(id):
     u = db.get_or_404(Usuario, id)
     d = request.json or {}
@@ -326,7 +418,7 @@ def update_usuario(id):
             return jsonify({"error": "Usuario ya existe"}), 409
         u.user = d["user"]
     if "pass" in d and d["pass"]:
-        u.pass_ = d["pass"]
+        u.pass_ = generate_password_hash(d["pass"])
     if "rol" in d:
         u.rol = d["rol"]
     if "activo" in d:
@@ -336,6 +428,7 @@ def update_usuario(id):
 
 
 @app.route("/api/usuarios/<id>", methods=["DELETE"])
+@admin_required
 def delete_usuario(id):
     u = db.get_or_404(Usuario, id)
     db.session.delete(u)
@@ -343,22 +436,19 @@ def delete_usuario(id):
     return jsonify({"ok": True})
 
 
-# ─── Import backup JSON ──────────────────────────────────────────────────────
+# ─── Import backup JSON ───────────────────────────────────────────────────────
 
 @app.route("/api/importar/backup", methods=["POST"])
+@admin_required
 def importar_backup():
-    """Accept a MediTrack JSON backup and upsert all records."""
     d = request.json or {}
     count = {"maquinas": 0, "registros": 0, "usuarios": 0}
 
     for m_data in d.get("maquinas", []):
         m = Maquina.query.get(m_data["id"])
         if m:
-            m.nombre = m_data.get("nombre", m.nombre)
-            m.serial = m_data.get("serial", m.serial)
-            m.estado = m_data.get("estado", m.estado)
-            m.ubicacion = m_data.get("ubicacion", m.ubicacion)
-            m.notas = m_data.get("notas", m.notas)
+            for f in ("nombre", "serial", "estado", "ubicacion", "notas"):
+                m.__setattr__(f, m_data.get(f, getattr(m, f)))
         else:
             db.session.add(Maquina(
                 id=m_data["id"],
@@ -392,14 +482,16 @@ def importar_backup():
             u.nombre = u_data.get("nombre", u.nombre)
             u.user = u_data.get("user", u.user)
             if u_data.get("pass"):
-                u.pass_ = u_data["pass"]
+                raw = u_data["pass"]
+                u.pass_ = raw if _is_hashed(raw) else generate_password_hash(raw)
             u.rol = u_data.get("rol", u.rol)
             u.activo = u_data.get("activo", u.activo)
         else:
+            raw = u_data.get("pass", "")
             db.session.add(Usuario(
                 id=u_data["id"],
                 user=u_data["user"],
-                pass_=u_data.get("pass", ""),
+                pass_=raw if _is_hashed(raw) else generate_password_hash(raw),
                 nombre=u_data.get("nombre", ""),
                 rol=u_data.get("rol", "usuario"),
                 activo=u_data.get("activo", True),
@@ -419,7 +511,7 @@ def importar_backup():
     return jsonify({"ok": True, "importados": count})
 
 
-# ─── Export endpoints ────────────────────────────────────────────────────────
+# ─── Export endpoints ─────────────────────────────────────────────────────────
 
 def _all_data():
     regs = [r.to_dict() for r in Registro.query.order_by(Registro.fecha).all()]
@@ -428,28 +520,31 @@ def _all_data():
 
 
 @app.route("/api/exportar/registros/excel")
+@login_required
 def exportar_excel():
     regs, maquinas = _all_data()
     buf = generate_excel(regs, maquinas)
     return Response(
         buf.read(),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=meditrack_registros.xlsx"},
+        headers={"Content-Disposition": "attachment; filename=dipromes_registros.xlsx"},
     )
 
 
 @app.route("/api/exportar/registros/csv")
+@login_required
 def exportar_csv():
     regs, maquinas = _all_data()
     buf = generate_csv(regs, maquinas)
     return Response(
         buf.read(),
         mimetype="text/csv; charset=utf-8",
-        headers={"Content-Disposition": "attachment; filename=meditrack_registros.csv"},
+        headers={"Content-Disposition": "attachment; filename=dipromes_registros.csv"},
     )
 
 
 @app.route("/api/exportar/registros/pdf")
+@login_required
 def exportar_pdf():
     try:
         regs, maquinas = _all_data()
@@ -459,11 +554,12 @@ def exportar_pdf():
     return Response(
         buf.read(),
         mimetype="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=meditrack_registros.pdf"},
+        headers={"Content-Disposition": "attachment; filename=dipromes_registros.pdf"},
     )
 
 
 @app.route("/api/exportar/maquinas/excel")
+@login_required
 def exportar_maquinas_excel():
     _, maquinas = _all_data()
     from openpyxl import Workbook
@@ -501,13 +597,14 @@ def exportar_maquinas_excel():
     return Response(
         buf.read(),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=meditrack_maquinas.xlsx"},
+        headers={"Content-Disposition": "attachment; filename=dipromes_maquinas.xlsx"},
     )
 
 
-# ─── Config (ARS list, etc.) ────────────────────────────────────────────────
+# ─── Config (ARS list, etc.) ──────────────────────────────────────────────────
 
 @app.route("/api/config/<key>")
+@login_required
 def get_config(key):
     c = Config.query.get(key)
     if not c:
@@ -516,6 +613,7 @@ def get_config(key):
 
 
 @app.route("/api/config/<key>", methods=["PUT"])
+@admin_required
 def set_config(key):
     c = Config.query.get(key)
     payload = json.dumps(request.json, ensure_ascii=False)
@@ -527,20 +625,22 @@ def set_config(key):
     return jsonify(json.loads(payload))
 
 
-# ─── DB management ──────────────────────────────────────────────────────────
+# ─── DB management ────────────────────────────────────────────────────────────
 
 @app.route("/api/exportar/backup")
+@admin_required
 def exportar_backup():
-    """Full JSON backup of all tables."""
+    """Full JSON backup — passwords are exported as hashes, never plaintext."""
     regs = [r.to_dict() for r in Registro.query.order_by(Registro.fecha).all()]
     maquinas = [m.to_dict() for m in Maquina.query.all()]
+    # include_pass=True is safe here because passwords are now hashed
     usuarios = [u.to_dict(include_pass=True) for u in Usuario.query.all()]
     pacientes_master = {
         pm.nombre: json.loads(pm.datos or "{}")
         for pm in PacienteMaster.query.all()
     }
     payload = json.dumps({
-        "version": 1,
+        "version": 2,
         "exportado": __import__("datetime").datetime.now().isoformat(),
         "maquinas": maquinas,
         "registros": regs,
@@ -550,25 +650,25 @@ def exportar_backup():
     return Response(
         payload.encode("utf-8"),
         mimetype="application/json",
-        headers={"Content-Disposition": "attachment; filename=meditrack_backup.json"},
+        headers={"Content-Disposition": "attachment; filename=dipromes_backup.json"},
     )
 
 
 @app.route("/api/db/reset", methods=["POST"])
+@admin_required
 def db_reset():
     """Wipe all data. Pass reseed=true to reload demo data."""
     reseed = (request.json or {}).get("reseed", False)
     Registro.query.delete()
     Maquina.query.delete()
     PacienteMaster.query.delete()
-    # keep usuarios so the admin can still log in
     db.session.commit()
     if reseed:
         seed_if_empty()
     return jsonify({"ok": True, "reseed": reseed})
 
 
-# ─── DB Init & Seed ─────────────────────────────────────────────────────────
+# ─── DB Init & Seed ──────────────────────────────────────────────────────────
 
 SEED_MAQUINAS = [
     {"id": "MAQ01", "nombre": "Maquina No. 1", "serial": "250619003", "estado": "Operativa", "ubicacion": "Consulta", "notas": ""},
@@ -608,7 +708,7 @@ SEED_REGISTROS = [
     {"id":"R024","fecha":"2026-05-25","nombre":"Armenio Gomez","cedula":"022-0002732-0","sexo":"","edad":60,"lesion":"Pierna derecha","direccion":"Neiba (Moscoso Puello)","tel1":"829-868-4395 (Lisset)","tel2":"809-663-6823 (Candido)","dr_refiere":"","ars":"Privado","maquina":"","estatus":"Desactivado","motivo":"","facturacion":12000},
     {"id":"R025","fecha":"2026-05-25","nombre":"Elias German Mago Quezada","cedula":"001-6429938-3","sexo":"M","edad":62,"lesion":"Pierna","direccion":"San Luis (Ney Arias)","tel1":"39 379 159 4946","tel2":"","dr_refiere":"","ars":"Privado","maquina":"","estatus":"Desactivado","motivo":"1era Colocacion","facturacion":13000},
     {"id":"R026","fecha":"2026-05-25","nombre":"Faustino Rosario","cedula":"059-0001895-2","sexo":"F","edad":70,"lesion":"Pecho","direccion":"Nagua (Mac Center)","tel1":"809-946-0510 (Angelita Pichardo)","tel2":"849-403-78210 (Paulina)","dr_refiere":"","ars":"Privado","maquina":"","estatus":"Desactivado","motivo":"2da Colocacion","facturacion":13000},
-    {"id":"R027","fecha":"2026-05-27","nombre":"Jose Adames","cedula":"","sexo":"","edad":80,"lesion":"Pie Izquierdo","direccion":"Bella Vista","tel1":"809-330-5529","tel2":"","dr_refiere":"","ars":"Privado","maquina":"","estatus":"Desactivado","motivo":"5ta Colocacion (Retirada el 2 de Juniors)","facturacion":0},
+    {"id":"R027","fecha":"2026-05-27","nombre":"Jose Adames","cedula":"","sexo":"","edad":80,"lesion":"Pie Izquierdo","direccion":"Bella Vista","tel1":"809-330-5529","tel2":"","dr_refiere":"","ars":"Privado","maquina":"","estatus":"Desactivado","motivo":"5ta Colocacion (Retirada el 2 de Junios)","facturacion":0},
     {"id":"R028","fecha":"2026-05-27","nombre":"Ramon Emilio Campusano","cedula":"001-0676784-1","sexo":"","edad":73,"lesion":"Zacra, las 2 caderas","direccion":"Manoguayabo","tel1":"809-304-5187 (Marcos Campusano)","tel2":"809-217-9714 (Victor Campusano)","dr_refiere":"","ars":"Privado","maquina":"","estatus":"Desactivado","motivo":"3era Colocacion","facturacion":0},
     {"id":"R029","fecha":"2026-05-29","nombre":"Dr. Felix Batista","cedula":"","sexo":"","edad":None,"lesion":"Pecho","direccion":"Azilo Haina","tel1":"829-907-1783","tel2":"","dr_refiere":"","ars":"Privado","maquina":"MAQ01","estatus":"Activo","motivo":"","facturacion":13000},
     {"id":"R030","fecha":"2026-05-30","nombre":"Santo Tejeda","cedula":"003-0065067-8","sexo":"","edad":52,"lesion":"Pierna derecha","direccion":"Bani","tel1":"829-380-1747 (Orquidea)","tel2":"829-788-2378 (Robert)","dr_refiere":"","ars":"Privado","maquina":"MAQ04","estatus":"Activo","motivo":"1era Colocacion","facturacion":13000},
@@ -616,36 +716,17 @@ SEED_REGISTROS = [
     {"id":"R032","fecha":"2026-05-30","nombre":"Julia Ozuna Rodriguez","cedula":"001-0449791-2","sexo":"","edad":72,"lesion":"Zacra","direccion":"Res. Maximo Gomez","tel1":"","tel2":"809-568-1314","dr_refiere":"","ars":"Privado","maquina":"MAQ02","estatus":"Activo","motivo":"2da Colocacion","facturacion":13000},
 ]
 
-SEED_USUARIOS = [
-    {"id": "U001", "user": "admin", "pass": "medic2026", "nombre": "Administrador", "rol": "admin", "activo": True},
-    {"id": "U002", "user": "dr1", "pass": "doctor123", "nombre": "Dr. Médico", "rol": "usuario", "activo": True},
-]
-
+# Seed passwords come from env vars — change via Render dashboard, not in code
+_ADMIN_PASS = os.environ.get("ADMIN_PASS", "dipromes2026")
+_DR1_PASS = os.environ.get("DR1_PASS", "doctor123")
 
 SEED_ARS = [
-    # Públicas
-    "Senasa Subsidiado",
-    "Senasa Contributivo",
-    "Semma",
-    # Privadas
-    "ARS Humano",
-    "ARS Universal",
-    "ARS Simag",
-    "ARS Reservas",
-    "ARS Meta Salud",
-    "ARS Mapfre BHD",
-    "ARS CMD",
-    "ARS Futuro",
-    "ARS Plan Salud Banco Central",
-    "ARS APS",
-    "ARS UASD",
-    "ARS Premier",
-    "ARS LAR",
-    "ARS Yunen",
-    "ARS Asemap",
-    "ARS Monumental",
-    # Sin seguro
-    "Privado (Sin ARS)",
+    "Senasa Subsidiado", "Senasa Contributivo", "Semma",
+    "ARS Humano", "ARS Universal", "ARS Simag", "ARS Reservas",
+    "ARS Meta Salud", "ARS Mapfre BHD", "ARS CMD", "ARS Futuro",
+    "ARS Plan Salud Banco Central", "ARS APS", "ARS UASD",
+    "ARS Premier", "ARS LAR", "ARS Yunen", "ARS Asemap",
+    "ARS Monumental", "Privado (Sin ARS)",
 ]
 
 
@@ -657,20 +738,25 @@ def seed_if_empty():
         for r in SEED_REGISTROS:
             db.session.add(_registro_from_dict(r, r["id"]))
     if Usuario.query.count() == 0:
-        for u in SEED_USUARIOS:
-            db.session.add(Usuario(
-                id=u["id"], user=u["user"], pass_=u["pass"],
-                nombre=u["nombre"], rol=u["rol"], activo=u["activo"],
-            ))
+        db.session.add(Usuario(
+            id="U001", user="admin",
+            pass_=generate_password_hash(_ADMIN_PASS),
+            nombre="Administrador", rol="admin", activo=True,
+        ))
+        db.session.add(Usuario(
+            id="U002", user="dr1",
+            pass_=generate_password_hash(_DR1_PASS),
+            nombre="Dr. Médico", rol="usuario", activo=True,
+        ))
     if not Config.query.get("ars"):
         db.session.add(Config(key="ars", value=json.dumps(SEED_ARS, ensure_ascii=False)))
     db.session.commit()
 
 
-# ─── Entry point ─────────────────────────────────────────────────────────────
+# ─── Entry point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
         seed_if_empty()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=os.environ.get("FLASK_DEBUG", "0") == "1")

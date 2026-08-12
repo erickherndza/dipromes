@@ -248,11 +248,20 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg3);color:var
 // ══════════════════════════════════════════════════════════════════════════════
 // API — REST client
 // ══════════════════════════════════════════════════════════════════════════════
+// Escape HTML to prevent XSS when injecting user data into innerHTML
+const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+function _handleUnauth(){
+  sessionStorage.removeItem('meditrack_session');
+  document.getElementById('login-screen').style.display='flex';
+  document.querySelector('.app').style.display='none';
+}
+
 const api = {
-  async get(path){ const r=await fetch('/api'+path); if(!r.ok) throw new Error(r.statusText); return r.json(); },
-  async post(path,data){ const r=await fetch('/api'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); if(!r.ok) throw new Error(r.statusText); return r.json(); },
-  async put(path,data){ const r=await fetch('/api'+path,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); if(!r.ok) throw new Error(r.statusText); return r.json(); },
-  async del(path){ const r=await fetch('/api'+path,{method:'DELETE'}); if(!r.ok) throw new Error(r.statusText); return r.json(); },
+  async get(path){ const r=await fetch('/api'+path,{credentials:'same-origin'}); if(r.status===401){_handleUnauth();throw new Error('No autorizado');} if(!r.ok) throw new Error(r.statusText); return r.json(); },
+  async post(path,data){ const r=await fetch('/api'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),credentials:'same-origin'}); if(r.status===401&&path!=='/auth/login'){_handleUnauth();throw new Error('No autorizado');} if(!r.ok) throw new Error(r.statusText); return r.json(); },
+  async put(path,data){ const r=await fetch('/api'+path,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),credentials:'same-origin'}); if(r.status===401){_handleUnauth();throw new Error('No autorizado');} if(!r.ok) throw new Error(r.statusText); return r.json(); },
+  async del(path){ const r=await fetch('/api'+path,{method:'DELETE',credentials:'same-origin'}); if(r.status===401){_handleUnauth();throw new Error('No autorizado');} if(!r.ok) throw new Error(r.statusText); return r.json(); },
 };
 
 async function initDB(){
@@ -429,10 +438,7 @@ const DB_DEFAULTS_UNUSED = {
   ]
 };
 
-const DB_USUARIOS_DEFAULT = [
-  {id:'U001',user:'admin',pass:'medic2026',nombre:'Administrador',rol:'admin',activo:true},
-  {id:'U002',user:'dr1',pass:'doctor123',nombre:'Dr. Médico',rol:'usuario',activo:true},
-];
+// Credentials are managed server-side only — never stored in the client bundle.
 
 // Local cache — populated from API on startup
 const DB = {maquinas:[],registros:[],pacientes_master:{},usuarios:[],ars:[]};
@@ -728,25 +734,25 @@ function filterPacientes(){
   ).sort((a,b)=>(a.estatus==='Activo'?0:1)-(b.estatus==='Activo'?0:1));
   const tb=document.getElementById('tbody-pac');if(!tb)return;
   tb.innerHTML=pacs.length?pacs.map(p=>`
-  <tr onclick="verPacienteDetalle('${p.nombre.replace(/'/g,"\\'")}')">
+  <tr onclick="verPacienteDetalle('${esc(p.nombre)}')">
     <td>
       <div style="display:flex;align-items:center;gap:9px">
         <div class="avatar" style="width:30px;height:30px;font-size:11px">${initials(p.nombre)}</div>
-        <div><div style="font-weight:600">${p.nombre}</div><div style="font-size:11px;color:var(--text2)">${p.edad?p.edad+' años':''} ${p.sexo?'· '+p.sexo:''}</div></div>
+        <div><div style="font-weight:600">${esc(p.nombre)}</div><div style="font-size:11px;color:var(--text2)">${p.edad?p.edad+' años':''} ${p.sexo?'· '+esc(p.sexo):''}</div></div>
       </div>
     </td>
-    <td style="font-family:monospace;font-size:12px">${p.cedula||'—'}</td>
-    <td style="font-size:12px">${p.lesion||'—'}</td>
-    <td style="font-size:12px">${p.tel1||p.tel2||'—'}</td>
-    <td><span class="badge badge-gray">${p.ars||'—'}</span></td>
+    <td style="font-family:monospace;font-size:12px">${esc(p.cedula)||'—'}</td>
+    <td style="font-size:12px">${esc(p.lesion)||'—'}</td>
+    <td style="font-size:12px">${esc(p.tel1||p.tel2)||'—'}</td>
+    <td><span class="badge badge-gray">${esc(p.ars)||'—'}</span></td>
     <td style="text-align:center"><span class="badge badge-info">${p.colocaciones.length}</span></td>
     <td>${stBadge(p.estatus)}</td>
     <td style="font-weight:600">${fmt(p.total_facturado)}</td>
     <td style="white-space:nowrap">
-      <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();verPacienteDetalle('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-eye"></i></button>
-      <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();editarPaciente('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-pencil"></i></button>
-      <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();abrirAsignarEquipo('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-device-laptop-medical"></i></button>
-      <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();confirmarEliminarPaciente('${p.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i></button>
+      <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();verPacienteDetalle('${esc(p.nombre)}')"><i class="ti ti-eye"></i></button>
+      <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();editarPaciente('${esc(p.nombre)}')"><i class="ti ti-pencil"></i></button>
+      <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();abrirAsignarEquipo('${esc(p.nombre)}')"><i class="ti ti-device-laptop-medical"></i></button>
+      <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();confirmarEliminarPaciente('${esc(p.nombre)}')"><i class="ti ti-trash"></i></button>
     </td>
   </tr>`).join(''):`<tr><td colspan="9"><div class="empty-state"><i class="ti ti-user-off"></i>No se encontraron pacientes</div></td></tr>`;
 }
@@ -880,31 +886,31 @@ function filterColocaciones(){
   const tb=document.getElementById('tbody-col');if(!tb)return;
   tb.innerHTML=rows.map(r=>{
     const m=DB.maquinas.find(x=>x.id===r.maquina);
-    return`<tr onclick="verPacienteDetalle('${r.nombre.replace(/'/g,"\\'")}')">
+    return`<tr onclick="verPacienteDetalle('${esc(r.nombre)}')">
       <td>
         <div style="display:flex;align-items:center;gap:9px">
           <div class="avatar" style="width:30px;height:30px;font-size:11px">${initials(r.nombre)}</div>
           <div>
-            <div style="font-weight:600">${r.nombre}</div>
-            <div style="font-size:11px;color:var(--text2)">${r.lesion||''}</div>
+            <div style="font-weight:600">${esc(r.nombre)}</div>
+            <div style="font-size:11px;color:var(--text2)">${esc(r.lesion)||''}</div>
           </div>
         </div>
       </td>
-      <td>${m?`<span class="badge badge-brand">${m.nombre}</span>`:'<span class="badge badge-gray">Sin equipo</span>'}</td>
-      <td style="font-size:12px">${r.motivo||'—'}</td>
+      <td>${m?`<span class="badge badge-brand">${esc(m.nombre)}</span>`:'<span class="badge badge-gray">Sin equipo</span>'}</td>
+      <td style="font-size:12px">${esc(r.motivo)||'—'}</td>
       <td style="font-size:12px;white-space:nowrap">${fmtD(r.fecha)}</td>
       <td style="font-size:12px;white-space:nowrap">${r.fecha_retiro?fmtD(r.fecha_retiro):'<span style="color:var(--ok-t);font-weight:600">En uso</span>'}</td>
-      <td><span class="badge badge-gray" style="font-size:10px">${r.ars||'—'}</span></td>
+      <td><span class="badge badge-gray" style="font-size:10px">${esc(r.ars)||'—'}</span></td>
       <td style="font-weight:600">${r.facturacion?fmt(r.facturacion):'—'}</td>
       <td>${stBadge(r.estatus)}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();verPacienteDetalle('${r.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-eye"></i></button>
-        <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();generarConduce('${r.id}')"><i class="ti ti-printer"></i></button>
+        <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();verPacienteDetalle('${esc(r.nombre)}')"><i class="ti ti-eye"></i></button>
+        <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();generarConduce('${esc(r.id)}')"><i class="ti ti-printer"></i></button>
         ${r.estatus==='Activo'?`
-          <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();abrirCambiarEquipo('${r.id}')" title="${r.maquina?'Cambiar equipo':'Asignar equipo'}">
+          <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();abrirCambiarEquipo('${esc(r.id)}')" title="${r.maquina?'Cambiar equipo':'Asignar equipo'}">
             <i class="ti ti-${r.maquina?'arrows-exchange':'device-laptop-medical'}"></i>${r.maquina?'Cambiar':'Asignar'}
           </button>
-          <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();desactivarPaciente('${r.nombre.replace(/'/g,"\\'")}')"><i class="ti ti-player-stop"></i>Retirar</button>
+          <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();desactivarPaciente('${esc(r.nombre)}')"><i class="ti ti-player-stop"></i>Retirar</button>
         `:''}
       </td>
     </tr>`;
@@ -2505,8 +2511,9 @@ async function login(){
   }catch(e){document.getElementById('login-error').style.display='';}
 }
 
-function logout(){
+async function logout(){
   if(!confirm('¿Cerrar sesión?')) return;
+  try{ await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'}); }catch(e){}
   sessionStorage.removeItem('meditrack_session');
   document.getElementById('login-screen').style.display='flex';
   document.querySelector('.app').style.display='none';
