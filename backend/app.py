@@ -1,10 +1,11 @@
 """DIPROMES — Flask backend."""
 import json
 import os
+import secrets
 from datetime import timedelta
 from functools import wraps
 
-from flask import Flask, request, jsonify, send_from_directory, Response, session
+from flask import Flask, g, request, jsonify, send_from_directory, Response, session
 from flask_cors import CORS
 from collections import defaultdict
 from time import time
@@ -29,6 +30,12 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "https://dipromes.onrender.com")
 CORS(app, origins=[ALLOWED_ORIGIN] if IS_PROD else ["*"], supports_credentials=True)
 
+# ─── Per-request nonce (CSP) ─────────────────────────────────────────────────
+@app.before_request
+def _set_nonce():
+    g.nonce = secrets.token_urlsafe(16)
+
+
 # ─── HTTP security headers (no external lib needed) ──────────────────────────
 @app.after_request
 def add_security_headers(resp):
@@ -37,6 +44,20 @@ def add_security_headers(resp):
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     if IS_PROD:
         resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    nonce = getattr(g, "nonce", None)
+    if nonce:
+        csp = (
+            f"default-src 'self'; "
+            f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net https://unpkg.com; "
+            f"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            f"font-src 'self' https://cdn.jsdelivr.net data:; "
+            f"img-src 'self' https://*.tile.openstreetmap.org https://unpkg.com data: blob:; "
+            f"connect-src 'self'; "
+            f"object-src 'none'; "
+            f"base-uri 'self'; "
+            f"frame-ancestors 'none';"
+        )
+        resp.headers["Content-Security-Policy"] = csp
     return resp
 
 # ─── Rate limiting — simple in-memory token bucket per IP ────────────────────
@@ -121,7 +142,11 @@ def paciente_actual(maq_id):
 
 @app.route("/")
 def index():
-    return send_from_directory(BASE_DIR, "index.html")
+    with open(os.path.join(BASE_DIR, "index.html"), encoding="utf-8") as f:
+        html = f.read()
+    # Inject nonce into the single bare inline <script> block (the SPA logic)
+    html = html.replace("<script>\n", f'<script nonce="{g.nonce}">\n', 1)
+    return Response(html, mimetype="text/html; charset=utf-8")
 
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
