@@ -1,4 +1,4 @@
-# CLAUDE.md — MediTrack Pro
+# CLAUDE.md — DIPROMES
 
 > Archivo de contexto del proyecto para Claude Code (`cc`).
 > Léelo antes de tocar cualquier archivo del proyecto.
@@ -7,11 +7,14 @@
 
 ## Descripción del proyecto
 
-**MediTrack Pro** es un sistema de gestión de activos médicos y pacientes, desarrollado para un negocio de terapias médicas en Santo Domingo, República Dominicana. El negocio presta máquinas terapéuticas a pacientes en sus domicilios o en centros médicos, y registra cada colocación con su facturación correspondiente.
+**DIPROMES** (antes MediTrack Pro) es un sistema de gestión de activos médicos y pacientes para **Dipromes Terapias VAC**, negocio de terapia de compresión/presoterapia en Santo Domingo, República Dominicana. El negocio coloca máquinas terapéuticas en pacientes en domicilio o centros médicos y registra cada colocación con su facturación.
 
-El sistema reemplaza un flujo manual en Excel (archivo: `Registro_Pacientes_Mayo_2026-Activos.xlsx`) y lo convierte en una aplicación web estructurada, conectada y expandible.
+El sistema reemplazó un flujo manual en Excel y está desplegado en producción en Render.com con base de datos PostgreSQL.
 
-**Estado actual:** Demo funcional en un solo archivo HTML (`index.html`) con datos reales importados del Excel original. Base de datos en memoria (JavaScript). Sin backend aún.
+**Estado actual:** Aplicación web full-stack en producción. Backend Flask + PostgreSQL en Render. Frontend HTML+CSS+Vanilla JS en un solo archivo `index.html`.
+
+**URL de producción:** `https://dipromes.onrender.com`
+**Repositorio:** `https://github.com/erickherndza/dipromes`
 
 ---
 
@@ -19,54 +22,32 @@ El sistema reemplaza un flujo manual en Excel (archivo: `Registro_Pacientes_Mayo
 
 | Capa | Tecnología | Notas |
 |------|-----------|-------|
-| Frontend actual | HTML + CSS + Vanilla JS | Un solo archivo `index.html` |
-| Frontend futuro | React + Vite + TypeScript | Migración planificada |
-| Backend planificado | Python 3.11 + Flask | Mismo patrón que Facturar.do |
-| Base de datos planificada | SQLite → PostgreSQL | SQLite para dev, Postgres para producción |
-| Hosting planificado | Render.com | Igual que Facturar.do |
+| Frontend | HTML + CSS + Vanilla JS | Un solo archivo `index.html` |
+| Backend | Python 3.11 + Flask | `backend/app.py` |
+| ORM | SQLAlchemy (Flask-SQLAlchemy 3.1) | Modelos en `backend/models.py` |
+| Base de datos | SQLite (dev local) → PostgreSQL (Render) | Driver: `pg8000` (pure Python, sin C) |
+| Hosting | Render.com (free tier) | `render.yaml` + `wsgi.py` |
+| Servidor WSGI | Gunicorn 22 | 2 workers, timeout 60s |
 | Íconos | Tabler Icons (webfont CDN) | `ti ti-*` |
-| Colores de marca | Crimson `#7B1A1A`, Negro `#1A1A1A`, Blanco `#FFFFFF` | Paleta EHA personal |
+| Colores de marca | Crimson `#7B1A1A`, Negro `#1A1A1A`, Blanco `#FFFFFF` | Paleta EHA |
+| Export | openpyxl (Excel/CSV), HTML printable (PDF via browser) | Sin reportlab |
 
 ---
 
-## Estructura actual del proyecto
+## Estructura del proyecto
 
 ```
-meditrack-pro/
-├── index.html          # App completa (frontend + datos en memoria)
-├── README.md           # Instrucciones para correr el demo
-├── CLAUDE.md           # Este archivo
-└── meditrack-plantilla.xlsx  # Plantilla de importación (generada)
-```
-
-### Estructura planificada (fase backend)
-
-```
-meditrack-pro/
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── views/
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── Pacientes.tsx
-│   │   │   ├── Activos.tsx
-│   │   │   ├── Registro.tsx
-│   │   │   ├── Maquinas.tsx
-│   │   │   └── Facturacion.tsx
-│   │   ├── api.ts          # Llamadas al backend
-│   │   └── main.tsx
-│   └── index.html
+dipromes/
+├── index.html              # Frontend completo (SPA vanilla JS)
+├── wsgi.py                 # Entry point Gunicorn — init DB en first request
+├── render.yaml             # Configuración Render.com
+├── CLAUDE.md               # Este archivo
 ├── backend/
-│   ├── app.py              # Flask app principal
+│   ├── app.py              # Flask app: rutas, auth, seguridad
 │   ├── models.py           # SQLAlchemy models
-│   ├── routes/
-│   │   ├── pacientes.py
-│   │   ├── maquinas.py
-│   │   ├── registros.py
-│   │   └── facturacion.py
-│   ├── importar.py         # Parser Excel/XML
-│   └── requirements.txt
-└── CLAUDE.md
+│   ├── exportar.py         # Helpers: Excel, CSV, PDF/HTML, consent_html
+│   └── requirements.txt    # 6 paquetes (sin C extensions)
+└── meditrack-plantilla.xlsx  # Plantilla de importación
 ```
 
 ---
@@ -74,216 +55,243 @@ meditrack-pro/
 ## Módulos del sistema
 
 ### 1. Dashboard
-Vista principal con métricas en tiempo real:
-- Pacientes únicos totales
-- Activos con máquina asignada ahora
-- Máquinas operativas vs en uso
-- Facturación del mes
+Métricas en tiempo real: pacientes únicos, activos ahora, máquinas operativas, facturación del mes.
 
-### 2. Pacientes (Clientes)
-Lista deduplicada de todos los pacientes únicos.
-- Un paciente puede tener múltiples colocaciones (filas en el registro histórico)
-- La deduplicación se hace por **nombre** (en producción será por cédula)
-- Cada paciente tiene ficha con: datos personales, historial de colocaciones, total facturado
-- Acciones: nueva colocación, activar/desactivar
+### 2. Pacientes
+Lista deduplicada por nombre (→ por cédula en el futuro). Ficha con historial de colocaciones y total facturado.
 
-### 3. Activos ahora
-Subvista filtrada: solo pacientes con `estatus = Activo`.
-- Fuente: hoja `Pacientes Activos` del Excel original (usaba `FILTER()` de Google Sheets)
-- En el sistema: filtrado en tiempo real desde `DB.registros`
-- Acción rápida: "Retirar" desactiva al paciente y libera su máquina
+### 3. Colocaciones (Activos ahora)
+Filtrado en tiempo real: `estatus = Activo`. Acción rápida de retiro.
 
 ### 4. Registro Completo
-Todas las filas del Excel original — cada fila es una colocación.
-- Filtros: nombre/cédula, estado (Activo/Desactivado), mes
-- Exportar a Excel (pendiente en producción)
-- Fuente del Excel: hoja `Registro Pacientes`, fila 4 = encabezados, fila 5 en adelante = datos
+Todas las colocaciones. Filtros por nombre/cédula, estado, mes. Exportar a Excel/CSV/PDF.
 
 ### 5. Máquinas (Inventario)
-Las 8 máquinas terapéuticas del negocio.
-- Fuente del Excel: hoja `Inventario de Maquinas`
-- Cada máquina tiene: nombre, serial, estado, paciente actual (si aplica), historial de todos los pacientes que la usaron
-- Conexión en tiempo real: asignar paciente ↔ aparece en "Activos" ↔ máquina marcada como ocupada
-- Acciones: asignar, retirar, editar, nueva máquina
+8 máquinas terapéuticas. Asignación 1:1 con paciente activo. CRUD completo.
 
-### 6. Facturación
-- Resumen de facturación por paciente
-- Saldos pendientes (ej: Ramón Campusano — RD$35,000 pendiente)
-- Base para futura emisión de e-CF (Comprobante Fiscal Electrónico) vía DGII
-- **Pendiente:** integración con ECF SSD como PSFE ($3/1,000 e-CFs)
+### 6. Conduces de Descargo (Facturación)
+Resumen de facturación y saldos pendientes por paciente.
+
+### 7. Consentimiento Informado ← NUEVO
+- Módulo en sidebar: **Documentos → Consentimiento**
+- Tabla `consentimientos` en PostgreSQL
+- Pestaña **Registros guardados**: listado de consentimientos con estado Firmado/Pendiente, botones Imprimir y Eliminar
+- Pestaña **Nuevo consentimiento**: formulario con autocompletar desde pacientes existentes, campos: nombre, cédula, edad, dirección, teléfono, médico, centro de salud, fecha firma, firmado (checkbox), notas
+- `GET /api/consentimientos/<id>/pdf` → genera HTML A4 server-side (sin reportlab), fiel al documento `consentimiento-VAC.docx` original
+- Botón **"Formulario en blanco"** en topbar y en la vista
+
+### 8. Mapa GPS
+Vista de pacientes activos con coordenadas.
+
+### 9. Usuarios (admin)
+Gestión de usuarios del sistema. Solo visible para rol `admin`.
+
+---
+
+## Seguridad implementada
+
+| Aspecto | Implementación |
+|---------|---------------|
+| Autenticación | Flask `session` con cookie httpOnly firmada (SECRET_KEY fija en Render env) |
+| Contraseñas | `werkzeug` scrypt hash — auto-upgrade de plaintext en primer login |
+| Autorización | `@login_required` / `@admin_required` en todas las rutas |
+| Rate limiting | In-memory: 10 req/min por IP en `/api/auth/login` |
+| CORS | Restringido a `ALLOWED_ORIGIN` en producción |
+| Headers | X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy |
+| XSS | Función `esc()` en todo innerHTML del frontend |
+| Reset emergencia | `ADMIN_RESET_PASS` env var → eliminar después de usar |
+
+**Variables de entorno requeridas en Render:**
+- `DATABASE_URL` — provista automáticamente por Render PostgreSQL
+- `SECRET_KEY` — string fijo y largo (crítico para sesiones multi-worker)
+- `ALLOWED_ORIGIN` — `https://dipromes.onrender.com`
+- `ADMIN_PASS` / `DR1_PASS` — contraseñas iniciales (solo aplican en seed)
 
 ---
 
 ## Modelo de datos
 
-### Máquina
-```js
-{
-  id: 'MAQ01',             // MAQ + número con cero
-  nombre: 'Maquina No. 1', // Nombre original del Excel
-  serial: '250619003',     // Serial del fabricante
-  estado: 'Operativa',     // Operativa | Requiere Revisión | Fuera de Servicio | Sin registrar
-  ubicacion: 'Consulta',   // Consulta | Domicilio | ...
-  paciente_actual: null,   // nombre del paciente si está activa, null si disponible
-  notas: ''
-}
+### Maquina (`maquinas`)
+```python
+id: String(10) PK          # MAQ01, MAQ02…
+nombre: String(100)
+serial: String(50)
+estado: String(50)         # Operativa | Requiere Revisión | Fuera de Servicio
+ubicacion: String(100)
+notas: Text
 ```
 
-### Registro (Colocación)
-```js
-{
-  id: 'R001',
-  fecha: '2026-05-05',           // ISO date string
-  nombre: 'Sebastian Adolfo...',  // Nombre completo del paciente
-  cedula: '001-0553575-1',        // Cédula dominicana
-  sexo: 'M',                      // M | F | ''
-  edad: 83,                       // número o null
-  lesion: 'Pierna Derecha',       // Área de lesión tratada
-  direccion: 'Hospital...',       // Domicilio o centro médico
-  tel1: '829-702-2598 (Kelvin)',  // Incluye nombre del contacto entre paréntesis
-  tel2: '',
-  dr_refiere: '',                 // Médico que refirió al paciente
-  ars: 'Privado',                 // ARS o 'Privado'
-  maquina: 'MAQ01',               // ID de la máquina | '' si no asignada
-  estatus: 'Activo',              // Activo | Desactivado
-  motivo: '2da Colocacion',       // Número de colocación o motivo de retiro
-  facturacion: 13000              // Monto cobrado en DOP, 0 si no cobrado
-}
+### Registro (`registros`) — una fila por colocación
+```python
+id: String(10) PK          # R001, R002…
+fecha: String(10)          # YYYY-MM-DD
+nombre: String(200)
+cedula: String(30)
+sexo: String(1)            # M | F
+edad: Integer
+lesion: String(200)
+direccion: String(300)
+tel1, tel2: String(100)
+dr_refiere: String(200)
+ars: String(100)           # Privado | nombre ARS
+maquina: String(10)        # FK → maquinas.id
+estatus: String(20)        # Activo | Desactivado
+motivo: String(300)
+facturacion: Float
+saldo_pendiente: Float
+modo_uso, condicion_salida, condicion_retorno: String(100)
+parametros, notas, notas_seguimiento: Text
+proxima_colocacion, fecha_retiro: String(10)
+observaciones_retiro: Text
+lat, lng: Float
+productos, fotos: Text     # JSON arrays
 ```
 
-### Vista Paciente Único (derivada)
-No se almacena — se calcula en runtime desde `DB.registros`:
-```js
-{
-  ...datosUltimoRegistro,
-  colocaciones: [...todosLosRegistros],  // array de todos sus registros
-  total_facturado: 52000,                // suma de facturacion
-  estatus: 'Activo'  // si cualquier registro tiene estatus Activo
-}
+### Usuario (`usuarios`)
+```python
+id: String(10) PK          # U001…
+user: String(50) UNIQUE
+pass: Text                 # scrypt hash
+nombre: String(200)
+rol: String(20)            # admin | usuario
+activo: Boolean
+```
+
+### Consentimiento (`consentimientos`) ← NUEVO
+```python
+id: String(10) PK          # C001…
+fecha_firma: String(10)    # YYYY-MM-DD
+nombre: String(200)
+cedula: String(30)
+edad: Integer
+direccion: String(300)
+telefono: String(100)
+medico: String(200)
+centro_salud: String(200)
+firmado: Boolean
+notas: Text
+```
+
+### PacienteMaster (`pacientes_master`)
+```python
+nombre: String(200) PK
+datos: Text                # JSON con datos extendidos
+```
+
+### Config (`config`)
+```python
+key: String(50) PK         # ej: 'ars'
+value: Text                # JSON
 ```
 
 ---
 
-## Reglas de negocio importantes
+## Reglas de negocio
 
-1. **Una máquina = un paciente a la vez.** Si una máquina tiene `paciente_actual !== null`, no puede asignarse a otro.
-2. **Múltiples colocaciones por paciente.** Cada visita/sesión es una fila nueva en el registro. No se editan filas — se agregan.
-3. **Deduplicación por cédula** (en producción). En el demo actual se deduplica por nombre porque varios registros no tienen cédula.
-4. **Montos en DOP** (pesos dominicanos). Sin decimales en la presentación. Usar `Intl.NumberFormat('es-DO', {currency:'DOP'})`.
-5. **ITBIS 18%** aplica a los servicios. Se calculará al momento de emitir el e-CF.
-6. **Saldo pendiente** (ej: Ramón Campusano): el motivo de la colocación incluye `"Resta RD$35,000.00"`. En producción esto debe ser un campo separado `saldo_pendiente: number`.
-7. **Fechas**: el Excel almacenaba números seriales de fecha (ej: 46172). Al importar se convierten a ISO date string `YYYY-MM-DD`.
-
----
-
-## Conexiones entre módulos
-
-```
-Máquinas ──────────────────────────────────────────┐
-   │ maquina.id ↔ registro.maquina                  │
-   ↓                                                 │
-Registro completo ──────────────────── Activos ahora│
-   │ agrupa por nombre/cédula                        │
-   ↓                                                 │
-Pacientes (vista única) ────────── Dashboard KPIs ──┘
-   │ suma facturación
-   ↓
-Facturación ────── (futuro) ────── ECF SSD / DGII
-```
+1. **Una máquina = un paciente a la vez.** `paciente_actual` se calcula en runtime.
+2. **Múltiples colocaciones por paciente.** No se editan — se agregan filas nuevas.
+3. **Deduplicación por nombre** (→ por cédula en el futuro).
+4. **Montos en DOP** sin decimales. `Intl.NumberFormat('es-DO', {currency:'DOP'})`.
+5. **ITBIS 18%** — futuro, al emitir e-CF.
+6. **`apply_migrations()`** en `wsgi.py` corre antes de seed — maneja ALTER TABLE que `create_all` no puede.
+7. **No instalar paquetes con C extensions** — Render free tier se cuelga. Usar solo pure-Python.
 
 ---
 
-## Próximos pasos (roadmap)
+## Importación de datos
 
-### Fase 1 — Demo local (ACTUAL ✅)
-- [x] Frontend HTML+CSS+JS en un solo archivo
-- [x] Datos reales importados del Excel original
-- [x] 6 módulos: Dashboard, Pacientes, Activos, Registro, Máquinas, Facturación
-- [x] Conexión en tiempo real entre módulos (asignar/retirar máquina)
-- [x] Modales de detalle con historial por paciente y por máquina
-- [x] Formularios: nueva colocación, nuevo paciente, nueva máquina
+El frontend acepta **Excel (.xlsx/.xls) y CSV (.csv)**:
+- Función `parsearArchivo(file)` detecta extensión y usa XLSX.js
+- CSV → `reader.readAsText` + `XLSX.read(text, {type:'string'})`
+- Excel → `reader.readAsArrayBuffer` + `XLSX.read(data, {type:'array'})`
+- Envía JSON a `POST /api/registros/bulk`
 
-### Fase 2 — Backend Flask (PENDIENTE)
-- [ ] Crear `backend/app.py` con Flask + SQLAlchemy
-- [ ] Modelos: `Maquina`, `Paciente`, `Colocacion`, `Factura`
-- [ ] API REST: CRUD completo para cada modelo
-- [ ] Parser de importación: leer `Registro Pacientes` y `Inventario de Maquinas` del Excel
-- [ ] Endpoint `POST /importar/excel` — recibe el archivo y procesa las 3 hojas
-- [ ] Migrar frontend a React + Vite + TypeScript
-- [ ] Despliegue en Render.com
-
-### Fase 3 — Facturación DGII (PENDIENTE)
-- [ ] Integración con ECF SSD como PSFE
-- [ ] Generar e-CF tipo 01 (Crédito Fiscal) y 02 (Consumidor Final)
-- [ ] Reportes 606 (compras) y 607 (ventas) para la DGII
-- [ ] Campo `saldo_pendiente` en modelo `Colocacion`
-- [ ] Historial de pagos parciales
-
-### Fase 4 — Funciones avanzadas (FUTURO)
-- [ ] Agenda de citas / mantenimiento de máquinas
-- [ ] Alertas por WhatsApp cuando vence una colocación
-- [ ] App móvil (Héctor Soriano — Flutter o React Native)
-- [ ] Multi-rubro: el sistema es genérico, puede adaptarse a otros tipos de activos físicos (no solo médico)
-- [ ] Exportar registro filtrado a Excel (mismo formato del original)
+**Columnas esperadas** (primera fila del archivo):
+`Nombre, Cédula, Sexo, Edad, Área de lesión, Dirección, Teléfono 1, Teléfono 2, Dr. que refiere, ARS, ID Máquina, N° Colocación, Monto (DOP), Fecha`
 
 ---
 
-## Instrucciones para Claude Code
+## Exportación
 
-### Al abrir el proyecto
-```bash
-# No requiere instalación — es HTML puro
-open index.html   # macOS
-```
+| Endpoint | Formato | Función |
+|----------|---------|---------|
+| `GET /api/exportar/registros/excel` | .xlsx | `generate_excel()` |
+| `GET /api/exportar/registros/csv` | .csv UTF-8 BOM | `generate_csv()` |
+| `GET /api/exportar/registros/pdf` | HTML printable | `generate_pdf()` (requiere reportlab — NO instalado) |
+| `GET /api/exportar/maquinas/excel` | .xlsx | inline en app.py |
+| `GET /api/exportar/backup` | .json | backup completo (admin) |
+| `POST /api/importar/backup` | .json | restaurar backup (admin) |
+| `GET /api/consentimientos/<id>/pdf` | HTML printable | `consent_html()` — sin deps extras |
 
-### Al modificar `index.html`
-1. Todo el estado vive en el objeto `DB` al inicio del `<script>`
-2. Las vistas se renderizan en `<div id="content">` vía `innerHTML`
-3. Los modales van en `<div id="modal-root">`
-4. El router es la función `go(view)` — agrega aquí si creas nuevas vistas
-5. `getPacientesUnicos()` es la función clave que deduplica el registro histórico
-6. Después de cualquier operación que modifique `DB`, llama a la función de render del view actual
+---
 
-### Convenciones de código
-- Funciones de render: `renderXxx()` — escriben en `#content`
-- Funciones de modal: `abrirXxx()` / `verXxxDetalle()` — escriben en `#modal-root`
-- Funciones de guardar: `guardarXxx()` — modifican `DB` y cierran modal
-- IDs de inputs en modales: prefijo de 2-3 letras + guion + campo (ej: `col-pac`, `np-nombre`)
-- Nunca usar `position:fixed` — rompe el layout del iframe
-- Colores: SOLO usar variables CSS (`--brand`, `--ok`, `--warn`, `--danger`, etc.)
-- Nunca hardcodear colores hex en el HTML
+## Convenciones de código (frontend)
 
-### Al agregar un nuevo módulo de vista
+- Funciones de render: `renderXxx()` → escriben en `#content`
+- Funciones de modal: `abrirXxx()` / `verXxxDetalle()` → escriben en `#modal-root`
+- Funciones de guardar: `guardarXxx()` → llaman al API y actualizan `DB`
+- IDs de inputs: prefijo 2-3 letras + guion + campo (`col-pac`, `cn-nombre`)
+- **Nunca** `position:fixed` — rompe el layout
+- **Siempre** `esc()` para cualquier valor dinámico en `innerHTML`
+- Colores: solo variables CSS (`--brand`, `--ok`, `--warn`, `--danger`)
+
+### Agregar un nuevo módulo de vista
 ```js
-// 1. Agregar ítem en el sidebar
+// 1. Sidebar
 <div class="nav-item" onclick="go('nuevo')" id="nav-nuevo">
-  <i class="ti ti-xxx"></i><span>Nuevo módulo</span>
+  <i class="ti ti-xxx"></i><span>Nombre</span>
 </div>
 
-// 2. Agregar al objeto TITLES y NUEVO_LABELS en el router
-const TITLES = { ..., nuevo: 'Nombre del módulo' }
-const NUEVO_LABELS = { ..., nuevo: 'Crear nuevo' }
+// 2. Router objects
+TITLES    = { ..., nuevo: 'Título de la vista' }
+NUEVO_LABELS = { ..., nuevo: 'Acción nueva' }
 
-// 3. Agregar función de render
-function renderNuevo() {
-  document.getElementById('content').innerHTML = `...`
-}
+// 3. Render function
+async function renderNuevo(){ ... }
 
-// 4. Registrar en el router go()
+// 4. Router go()
 ({..., nuevo: renderNuevo})[v]?.()
+
+// 5. handleNuevo()
+({..., nuevo: ()=>accionNuevo()})[VIEW]?.()
 ```
+
+---
+
+## Roadmap
+
+### ✅ Completado
+- [x] Backend Flask + PostgreSQL desplegado en Render
+- [x] Autenticación segura (scrypt, sessions, rate limiting, headers)
+- [x] CRUD completo: Registros, Máquinas, Usuarios, Config
+- [x] Importar Excel y CSV (client-side parsing → `/api/registros/bulk`)
+- [x] Exportar Excel, CSV desde backend
+- [x] Backup/restore JSON completo
+- [x] Módulo Consentimiento Informado (DB + PDF server-side)
+- [x] Mapa GPS de pacientes activos
+- [x] Gestión de usuarios (admin)
+
+### 🔲 Pendiente
+- [ ] Integración ECF SSD como PSFE (e-CF DGII tipo 01/02)
+- [ ] Reportes 606/607 para la DGII
+- [ ] Historial de pagos parciales (tabla `pagos`)
+- [ ] Agenda de citas / mantenimiento de máquinas
+- [ ] Alertas WhatsApp al vencer colocación
+- [ ] App móvil (Flutter o React Native)
+- [ ] Migrar frontend a React + Vite + TypeScript
+- [ ] SSL explícito en conexión PostgreSQL (pg8000 ssl_context)
+- [ ] Fotos migradas a Cloudinary (actualmente base64 en DB)
 
 ---
 
 ## Contexto del negocio
 
-- **Tipo de negocio:** Terapia médica con máquinas de presoterapia / terapia de compresión (basado en los datos — `área de lesión`, `colocaciones`, retiro de máquinas)
-- **Operación:** Las máquinas se colocan en pacientes en domicilio o centro médico. Un técnico las instala y retira. Cada colocación = una sesión de tratamiento con cobro.
-- **Clientes:** Todos `Privado` en el dataset actual. Posibles ARS en el futuro.
-- **Volumen:** ~32 registros en mayo 2026, ~15 pacientes únicos, 8 máquinas
+- **Empresa:** Dipromes Terapias VAC · Calle 6 Santo Tomás de Aquino No. 55, Zona Universitaria, Santo Domingo · RNC 131950965
+- **Operación:** Máquinas de terapia VAC se colocan en pacientes en domicilio o centros médicos. Técnico instala → máquina queda X días → técnico retira → se cobra.
+- **Volumen:** ~32 registros mayo 2026, ~15 pacientes únicos, 8 máquinas
 - **Facturación típica:** RD$13,000 – RD$22,000 por colocación
-- **Flujo típico:** Paciente llama → se agenda colocación → técnico instala máquina → máquina queda en casa X días → técnico retira → se cobra
-- **Adaptable a otros rubros:** el sistema es genérico (activos físicos + clientes + colocaciones/usos). Se puede usar para alquiler de equipos de construcción, audiovisual, etc.
+- **ARS:** Actualmente todos `Privado`. ARS previstas en el futuro.
+- **Dev:** Erick Hernández Arias · Inicio: junio 2026
 
 ---
 
@@ -291,11 +299,15 @@ function renderNuevo() {
 
 | Archivo | Descripción |
 |---------|-------------|
-| `Registro_Pacientes_Mayo_2026-Activos.xlsx` | Excel original del cliente — fuente de verdad de todos los datos |
-| `index.html` | Demo completo actual |
-| `meditrack-plantilla.xlsx` | Plantilla generada para importación futura |
-| `~/.claude/CLAUDE.md` | Configuración global de Claude Code (dev-debug-ia, convenciones) |
+| `Registro_Pacientes_Mayo_2026-Activos.xlsx` | Excel original — fuente de verdad inicial |
+| `consentimiento-VAC.docx` | Documento original de consentimiento informado |
+| `index.html` | Frontend SPA completo |
+| `backend/app.py` | Flask app: todas las rutas y lógica de negocio |
+| `backend/models.py` | Modelos SQLAlchemy |
+| `backend/exportar.py` | Helpers de exportación |
+| `wsgi.py` | Entry point: init DB, migrations, seed, emergency reset |
+| `render.yaml` | Config de deploy (pythonVersion: 3.11.0) |
 
 ---
 
-*Proyecto: MediTrack Pro · Cliente: Sector médico, Santo Domingo RD · Dev: Erick Hernández Arias · Inicio: junio 2026*
+*Proyecto: DIPROMES · Cliente: Dipromes Terapias VAC, Santo Domingo RD · Dev: Erick Hernández Arias · Inicio: junio 2026*
