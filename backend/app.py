@@ -142,11 +142,17 @@ def paciente_actual(maq_id):
 
 @app.route("/")
 def index():
+    # Range requests (scanners, partial-content clients) get the plain file
+    if request.headers.get("Range"):
+        return send_from_directory(BASE_DIR, "index.html")
+    nonce = g.nonce
     with open(os.path.join(BASE_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
     # Inject nonce into the single bare inline <script> block (the SPA logic)
-    html = html.replace("<script>\n", f'<script nonce="{g.nonce}">\n', 1)
-    return Response(html, mimetype="text/html; charset=utf-8")
+    html = html.replace("<script>\n", f'<script nonce="{nonce}">\n', 1)
+    resp = Response(html, mimetype="text/html; charset=utf-8")
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 # ─── Auth ────────────────────────────────────────────────────────────────────

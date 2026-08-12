@@ -297,10 +297,11 @@ def consent_html(c: dict) -> str:
     """Return a self-contained printable HTML page for a consent record."""
     def _line(val: str, width: str = "260px") -> str:
         content = val if val else "&nbsp;" * 30
+        fw = "600" if val else "400"
         return (
             f'<span style="display:inline-block;min-width:{width};'
             f'border-bottom:1px solid #333;padding-bottom:1px;'
-            f'font-weight:{\"600\" if val else \"400\"}">{content}</span>'
+            f'font-weight:{fw}">{content}</span>'
         )
 
     fecha = c.get("fecha_firma", "")
