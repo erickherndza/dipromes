@@ -199,7 +199,7 @@ def generate_pdf(registros, maquinas, titulo="Registro de Pacientes"):
     now = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     story = [
-        Paragraph("MediTrack Pro", title_style),
+        Paragraph("DIPROMES", title_style),
         Paragraph(f"{titulo} — Generado el {now}", sub_style),
         HRFlowable(width="100%", thickness=1, color=brand, spaceAfter=10),
     ]
@@ -283,7 +283,7 @@ def generate_pdf(registros, maquinas, titulo="Registro de Pacientes"):
     # Footer note
     story.append(Spacer(1, 0.4 * cm))
     story.append(Paragraph(
-        f"<font color='#9aa5b4'>MediTrack Pro · Documento generado automáticamente · {now}</font>",
+        f"<font color='#9aa5b4'>DIPROMES · Documento generado automáticamente · {now}</font>",
         ParagraphStyle("footer", parent=styles["Normal"], fontSize=7, alignment=1),
     ))
 
