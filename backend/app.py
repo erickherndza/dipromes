@@ -758,6 +758,21 @@ def seed_if_empty():
     db.session.commit()
 
 
+def emergency_reset():
+    """
+    Si ADMIN_RESET_PASS está definido como env var, actualiza la contraseña
+    del usuario 'admin'. Elimina la var de Render después de usarla.
+    """
+    new_pass = os.environ.get("ADMIN_RESET_PASS")
+    if not new_pass:
+        return
+    u = Usuario.query.filter_by(user="admin").first()
+    if u:
+        u.pass_ = generate_password_hash(new_pass)
+        db.session.commit()
+        app.logger.warning("Admin password reset via ADMIN_RESET_PASS. Remove this env var now.")
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
