@@ -2674,6 +2674,7 @@ async function login(){
     document.getElementById('login-screen').style.display='none';
     document.querySelector('.app').style.display='flex';
     mostrarTopbarUsuario(found.nombre,found.rol);
+    await initDB();
     go('dashboard');
   }catch(e){document.getElementById('login-error').style.display='';}
 }
@@ -2900,7 +2901,7 @@ async function confirmarEliminarUsuario(uid){
 }
 
 // ══ INIT ══
-initDB().then(()=>{ if(checkSession()) go('dashboard'); });
+if(checkSession()){ initDB().then(()=>go('dashboard')); }
 </script>
 </body>
 </html>
