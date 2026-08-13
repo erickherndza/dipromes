@@ -246,10 +246,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg3);color:var
     <div style="margin-top:14px;text-align:center">
       <button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--text3)" onclick="mostrarOlvidePass()">¿Olvidaste tu contraseña?</button>
     </div>
-    <div id="login-forgot" style="display:none;margin-top:12px;padding:12px;background:var(--bg2);border-radius:var(--r);font-size:12px;color:var(--text2);text-align:left">
-      <strong style="color:var(--text)">¿Olvidaste tu contraseña?</strong><br>
-      Contacta al administrador del sistema para que la restablezca desde el panel de <em>Gestión de Usuarios</em>.<br><br>
-      <span style="color:var(--text3)">Si eres el administrador, usa la variable de entorno <code>ADMIN_RESET_PASS</code> en Render.</span>
+    <div id="login-forgot" style="display:none;margin-top:12px;padding:14px;background:var(--bg2);border-radius:var(--r);font-size:12px;text-align:left">
+      <div style="font-weight:600;color:var(--text);margin-bottom:8px">Restablecer contraseña</div>
+      <div style="color:var(--text2);margin-bottom:10px">Ingresa tu usuario y te enviaremos una contraseña temporal al correo registrado.</div>
+      <input type="text" id="forgot-user" placeholder="Tu usuario (login)" style="width:100%;margin-bottom:8px;box-sizing:border-box" autocomplete="username">
+      <button class="btn btn-primary btn-sm" style="width:100%;justify-content:center" onclick="enviarReset()"><i class="ti ti-send"></i>Enviar contraseña temporal</button>
+      <div id="forgot-msg" style="margin-top:8px;display:none;font-size:12px"></div>
     </div>
   </div>
 </div>
@@ -2674,7 +2676,27 @@ function checkSession(){
 
 function mostrarOlvidePass(){
   const el=document.getElementById('login-forgot');
-  el.style.display=el.style.display==='none'?'block':'none';
+  const visible=el.style.display==='none';
+  el.style.display=visible?'block':'none';
+  if(visible) document.getElementById('forgot-user').focus();
+  document.getElementById('forgot-msg').style.display='none';
+}
+
+async function enviarReset(){
+  const user=document.getElementById('forgot-user').value.trim();
+  const msgEl=document.getElementById('forgot-msg');
+  if(!user){msgEl.textContent='Ingresa tu nombre de usuario.';msgEl.style.color='var(--danger-t)';msgEl.style.display='';return;}
+  try{
+    await api.post('/auth/forgot-password',{user});
+    msgEl.textContent='Si el usuario existe y tiene correo registrado, recibirás la contraseña temporal en tu email.';
+    msgEl.style.color='var(--ok)';
+    msgEl.style.display='';
+    document.getElementById('forgot-user').value='';
+  }catch(e){
+    msgEl.textContent='Error al procesar la solicitud.';
+    msgEl.style.color='var(--danger-t)';
+    msgEl.style.display='';
+  }
 }
 
 async function login(){
@@ -2778,6 +2800,10 @@ function abrirNuevoUsuario(){
       <input type="text" id="nu-user" placeholder="Ej. dgarcia" autocomplete="off">
     </div>
     <div class="form-group">
+      <label>Correo electrónico</label>
+      <input type="email" id="nu-email" placeholder="correo@ejemplo.com" autocomplete="email">
+    </div>
+    <div class="form-group">
       <label>Contraseña</label>
       <input type="password" id="nu-pass" placeholder="Mínimo 4 caracteres" autocomplete="new-password">
     </div>
@@ -2801,13 +2827,14 @@ function abrirNuevoUsuario(){
 async function guardarNuevoUsuario(){
   const nombre=document.getElementById('nu-nombre').value.trim();
   const user=document.getElementById('nu-user').value.trim().toLowerCase();
+  const email=document.getElementById('nu-email').value.trim();
   const pass=document.getElementById('nu-pass').value;
   const rol=document.getElementById('nu-rol').value;
   const errEl=document.getElementById('nu-error');
   if(!nombre||!user||!pass){ errEl.textContent='Completa todos los campos.'; errEl.style.display=''; return; }
   if(pass.length<4){ errEl.textContent='La contraseña debe tener al menos 4 caracteres.'; errEl.style.display=''; return; }
   try{
-    const creado=await api.post('/usuarios',{user,pass,nombre,rol,activo:true});
+    const creado=await api.post('/usuarios',{user,pass,nombre,email,rol,activo:true});
     DB.usuarios.push(creado);
     showToast('Usuario creado');
     closeModal();renderUsuarios();
@@ -2830,6 +2857,10 @@ function editarUsuario(uid){
     <div class="form-group">
       <label>Usuario (login)</label>
       <input type="text" id="eu-user" value="${u.user}" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Correo electrónico</label>
+      <input type="email" id="eu-email" value="${esc(u.email||'')}" placeholder="correo@ejemplo.com" autocomplete="email">
     </div>
     <div class="form-group">
       <label>Nueva contraseña <span style="font-weight:400;color:var(--text3)">(dejar vacío para no cambiar)</span></label>
@@ -2864,6 +2895,7 @@ async function guardarEditUsuario(uid){
   if(!u) return;
   const nombre=document.getElementById('eu-nombre').value.trim();
   const user=document.getElementById('eu-user').value.trim().toLowerCase();
+  const email=document.getElementById('eu-email').value.trim();
   const pass=document.getElementById('eu-pass').value;
   const rol=document.getElementById('eu-rol').value||u.rol;
   const activo=document.getElementById('eu-activo').value!=='0';
@@ -2871,7 +2903,7 @@ async function guardarEditUsuario(uid){
   if(!nombre||!user){ errEl.textContent='Nombre y usuario son obligatorios.'; errEl.style.display=''; return; }
   if(pass&&pass.length<4){ errEl.textContent='La contraseña debe tener al menos 4 caracteres.'; errEl.style.display=''; return; }
   try{
-    const upd={nombre,user,rol,activo};
+    const upd={nombre,user,email,rol,activo};
     if(pass) upd.pass=pass;
     const updated=await api.put('/usuarios/'+uid,upd);
     Object.assign(u,updated);

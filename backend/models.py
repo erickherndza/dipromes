@@ -99,6 +99,7 @@ class Usuario(db.Model):
     user = db.Column(db.String(50), unique=True, nullable=False)
     pass_ = db.Column('pass', db.Text, nullable=False)
     nombre = db.Column(db.String(200), nullable=False)
+    email = db.Column(db.String(200), default='')
     rol = db.Column(db.String(20), default='usuario')
     activo = db.Column(db.Boolean, default=True)
 
@@ -107,6 +108,7 @@ class Usuario(db.Model):
             'id': self.id,
             'user': self.user,
             'nombre': self.nombre,
+            'email': self.email or '',
             'rol': self.rol,
             'activo': self.activo,
         }
