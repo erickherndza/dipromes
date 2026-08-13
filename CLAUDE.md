@@ -72,7 +72,7 @@ Todas las colocaciones. Filtros por nombre/cédula, estado, mes. Exportar a Exce
 ### 6. Conduces de Descargo (Facturación)
 Resumen de facturación y saldos pendientes por paciente.
 
-### 7. Consentimiento Informado ← NUEVO
+### 7. Consentimiento Informado
 - Módulo en sidebar: **Documentos → Consentimiento**
 - Tabla `consentimientos` en PostgreSQL
 - Pestaña **Registros guardados**: listado de consentimientos con estado Firmado/Pendiente, botones Imprimir y Eliminar
@@ -98,9 +98,9 @@ Gestión de usuarios del sistema. Solo visible para rol `admin`.
 | Rate limiting | In-memory: 10 req/min por IP en `/api/auth/login` |
 | CORS | Restringido a `ALLOWED_ORIGIN` en producción |
 | Headers | X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy |
-| CSP | `Content-Security-Policy` con nonce por request (`secrets.token_urlsafe`) — `before_request` genera nonce, `after_request` emite header, ruta `/` lo inyecta en el `<script>` inline |
+| CSP | `Content-Security-Policy` con `'unsafe-inline'` — nonce removido porque bloqueaba todos los `onclick` inline del frontend (CSP spec: nonces solo aplican a bloques `<script nonce="...">`, no a event handlers) |
 | SRI | Todos los recursos CDN (Tabler Icons @3.46.0, Leaflet CSS/JS, XLSX.js) tienen `integrity="sha384-..."` y `crossorigin="anonymous"` |
-| XSS | Función `esc()` en todo innerHTML del frontend |
+| XSS | Función `esc()` en todo innerHTML del frontend — mitigación principal dado que `'unsafe-inline'` está activo |
 | Reset emergencia | `ADMIN_RESET_PASS` env var → eliminar después de usar |
 
 **Mozilla Observatory:** A+ (100/100) — auditado agosto 2026.
@@ -110,6 +110,8 @@ Gestión de usuarios del sistema. Solo visible para rol `admin`.
 - `SECRET_KEY` — string fijo y largo (crítico para sesiones multi-worker)
 - `ALLOWED_ORIGIN` — `https://dipromes.onrender.com`
 - `ADMIN_PASS` / `DR1_PASS` — contraseñas iniciales (solo aplican en seed)
+- `FELI_PASS` — contraseña inicial del usuario `feli` (default: `Feli@2026` si no se define)
+- `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` — para envío de contraseñas temporales por email (opcional)
 
 ---
 
@@ -157,6 +159,7 @@ id: String(10) PK          # U001…
 user: String(50) UNIQUE
 pass: Text                 # scrypt hash
 nombre: String(200)
+email: String(200)         # para forgot-password (agregado ago 2026)
 rol: String(20)            # admin | usuario
 activo: Boolean
 ```
@@ -179,7 +182,7 @@ notas: Text
 ### PacienteMaster (`pacientes_master`)
 ```python
 nombre: String(200) PK
-datos: Text                # JSON con datos extendidos
+datos: Text                # JSON con datos extendidos — to_dict() hace json.loads()
 ```
 
 ### Config (`config`)
@@ -197,8 +200,10 @@ value: Text                # JSON
 3. **Deduplicación por nombre** (→ por cédula en el futuro).
 4. **Montos en DOP** sin decimales. `Intl.NumberFormat('es-DO', {currency:'DOP'})`.
 5. **ITBIS 18%** — futuro, al emitir e-CF.
-6. **`apply_migrations()`** en `wsgi.py` corre antes de seed — maneja ALTER TABLE que `create_all` no puede.
+6. **`apply_migrations()`** en `wsgi.py` corre antes de seed — maneja ALTER TABLE que `create_all` no puede. Cada bloque usa try/except + rollback individual para ser idempotente.
 7. **No instalar paquetes con C extensions** — Render free tier se cuelga. Usar solo pure-Python.
+8. **Importar backup NO sobreescribe usuarios existentes** — protege contraseñas en producción. Solo inserta usuarios con IDs nuevos.
+9. **`_ensure_user(username, nombre, password, rol)`** — patrón para crear usuarios idempotentemente en `apply_migrations()`. Actualmente crea `feli` si no existe.
 
 ---
 
@@ -270,10 +275,12 @@ async function renderNuevo(){ ... }
 - [x] CRUD completo: Registros, Máquinas, Usuarios, Config
 - [x] Importar Excel y CSV (client-side parsing → `/api/registros/bulk`)
 - [x] Exportar Excel, CSV desde backend
-- [x] Backup/restore JSON completo
+- [x] Backup/restore JSON completo (import protege usuarios existentes)
 - [x] Módulo Consentimiento Informado (DB + PDF server-side)
 - [x] Mapa GPS de pacientes activos
-- [x] Gestión de usuarios (admin)
+- [x] Gestión de usuarios (admin) con campo email
+- [x] Pantalla login: forgot-password con envío de contraseña temporal por email (smtplib/STARTTLS)
+- [x] Usuario `feli` creado automáticamente vía `_ensure_user()` en migrations
 
 ### 🔲 Pendiente
 - [ ] Integración ECF SSD como PSFE (e-CF DGII tipo 01/02)
@@ -292,7 +299,7 @@ async function renderNuevo(){ ... }
 
 - **Empresa:** Dipromes Terapias VAC · Calle 6 Santo Tomás de Aquino No. 55, Zona Universitaria, Santo Domingo · RNC 131950965
 - **Operación:** Máquinas de terapia VAC se colocan en pacientes en domicilio o centros médicos. Técnico instala → máquina queda X días → técnico retira → se cobra.
-- **Volumen:** ~32 registros mayo 2026, ~15 pacientes únicos, 8 máquinas
+- **Volumen:** ~112 registros agosto 2026, ~15 pacientes únicos, hasta 22 máquinas (MAQ01–MAQ22)
 - **Facturación típica:** RD$13,000 – RD$22,000 por colocación
 - **ARS:** Actualmente todos `Privado`. ARS previstas en el futuro.
 - **Dev:** Erick Hernández Arias · Inicio: junio 2026
