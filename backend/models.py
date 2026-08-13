@@ -122,6 +122,9 @@ class PacienteMaster(db.Model):
     nombre = db.Column(db.String(200), primary_key=True)
     datos = db.Column(db.Text, default='{}')
 
+    def to_dict(self):
+        return json.loads(self.datos or '{}')
+
 
 class Consentimiento(db.Model):
     __tablename__ = 'consentimientos'
