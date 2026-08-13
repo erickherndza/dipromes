@@ -1,7 +1,11 @@
 """DIPROMES — Flask backend."""
 import json
 import os
+import smtplib
+import string
+import random
 from datetime import timedelta
+from email.mime.text import MIMEText
 from functools import wraps
 
 from flask import Flask, g, request, jsonify, send_from_directory, Response, session
@@ -181,6 +185,51 @@ def auth_login():
 def auth_logout():
     session.clear()
     return jsonify({"ok": True})
+
+
+def _send_email(to: str, subject: str, body: str) -> bool:
+    host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    user = os.environ.get("SMTP_USER", "")
+    pw   = os.environ.get("SMTP_PASS", "")
+    if not user or not pw:
+        return False
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = subject
+    msg["From"] = user
+    msg["To"] = to
+    try:
+        with smtplib.SMTP(host, port, timeout=10) as s:
+            s.starttls()
+            s.login(user, pw)
+            s.sendmail(user, [to], msg.as_string())
+        return True
+    except Exception:
+        return False
+
+
+@app.route("/api/auth/forgot-password", methods=["POST"])
+def forgot_password():
+    d = request.json or {}
+    username = (d.get("user") or "").strip().lower()
+    u = Usuario.query.filter_by(user=username).first()
+    # Always return ok=true to avoid leaking valid usernames
+    if not u or not u.email:
+        return jsonify({"ok": True, "sent": False})
+    # Generate 10-char random password
+    chars = string.ascii_letters + string.digits
+    temp_pass = "".join(random.SystemRandom().choice(chars) for _ in range(10))
+    u.pass_ = generate_password_hash(temp_pass)
+    db.session.commit()
+    body = (
+        f"Hola {u.nombre},\n\n"
+        f"Se solicitó restablecer tu contraseña en DIPROMES.\n\n"
+        f"Tu contraseña temporal es: {temp_pass}\n\n"
+        f"Inicia sesión con esta contraseña y cámbiala lo antes posible.\n\n"
+        f"— Sistema DIPROMES"
+    )
+    sent = _send_email(u.email, "Restablecimiento de contraseña — DIPROMES", body)
+    return jsonify({"ok": True, "sent": sent})
 
 
 # ─── Máquinas ────────────────────────────────────────────────────────────────
@@ -421,6 +470,7 @@ def create_usuario():
         user=d["user"],
         pass_=generate_password_hash(d["pass"]),
         nombre=d["nombre"],
+        email=d.get("email", ""),
         rol=d.get("rol", "usuario"),
         activo=d.get("activo", True),
     )
@@ -441,6 +491,8 @@ def update_usuario(id):
         if dup and dup.id != id:
             return jsonify({"error": "Usuario ya existe"}), 409
         u.user = d["user"]
+    if "email" in d:
+        u.email = d["email"]
     if "pass" in d and d["pass"]:
         u.pass_ = generate_password_hash(d["pass"])
     if "rol" in d:
@@ -812,7 +864,8 @@ SEED_REGISTROS = [
 
 # Seed passwords come from env vars — change via Render dashboard, not in code
 _ADMIN_PASS = os.environ.get("ADMIN_PASS", "dipromes2026")
-_DR1_PASS = os.environ.get("DR1_PASS", "doctor123")
+_DR1_PASS   = os.environ.get("DR1_PASS",   "doctor123")
+_FELI_PASS  = os.environ.get("FELI_PASS",  "Feli@2026")
 
 SEED_ARS = [
     "Senasa Subsidiado", "Senasa Contributivo", "Semma",
@@ -826,13 +879,33 @@ SEED_ARS = [
 
 def apply_migrations():
     """ALTER TABLE migrations that db.create_all() cannot handle."""
-    try:
-        with db.engine.connect() as conn:
-            # Widen pass column from VARCHAR(100) to TEXT for password hashes
+    with db.engine.connect() as conn:
+        try:
             conn.execute(db.text("ALTER TABLE usuarios ALTER COLUMN pass TYPE TEXT"))
             conn.commit()
-    except Exception:
-        pass  # Table doesn't exist yet (create_all will handle it), or already TEXT
+        except Exception:
+            conn.rollback()
+        try:
+            conn.execute(db.text("ALTER TABLE usuarios ADD COLUMN email TEXT DEFAULT ''"))
+            conn.commit()
+        except Exception:
+            conn.rollback()  # Column already exists
+    # Ensure required users exist (safe: no-op if already present)
+    _ensure_user("feli", "Dr. Félix", _FELI_PASS, "usuario")
+
+
+def _ensure_user(username, nombre, password, rol="usuario"):
+    """Crea el usuario si no existe. No modifica si ya existe."""
+    if not Usuario.query.filter_by(user=username).first():
+        db.session.add(Usuario(
+            id=next_usr_id(),
+            user=username,
+            pass_=generate_password_hash(password),
+            nombre=nombre,
+            rol=rol,
+            activo=True,
+        ))
+        db.session.commit()
 
 
 def seed_if_empty():
