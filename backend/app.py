@@ -555,13 +555,8 @@ def importar_backup():
     for u_data in d.get("usuarios", []):
         u = Usuario.query.get(u_data["id"])
         if u:
-            u.nombre = u_data.get("nombre", u.nombre)
-            u.user = u_data.get("user", u.user)
-            if u_data.get("pass"):
-                raw = u_data["pass"]
-                u.pass_ = raw if _is_hashed(raw) else generate_password_hash(raw)
-            u.rol = u_data.get("rol", u.rol)
-            u.activo = u_data.get("activo", u.activo)
+            # Never overwrite passwords or credentials of existing users from backup
+            pass
         else:
             raw = u_data.get("pass", "")
             db.session.add(Usuario(
