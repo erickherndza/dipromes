@@ -243,6 +243,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg3);color:var
     </div>
     <div id="login-error" style="font-size:12px;color:var(--danger-t);margin-bottom:10px;display:none">Usuario o contraseña incorrectos.</div>
     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="login()"><i class="ti ti-login"></i>Entrar</button>
+    <div style="margin-top:14px;text-align:center">
+      <button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--text3)" onclick="mostrarOlvidePass()">¿Olvidaste tu contraseña?</button>
+    </div>
+    <div id="login-forgot" style="display:none;margin-top:12px;padding:12px;background:var(--bg2);border-radius:var(--r);font-size:12px;color:var(--text2);text-align:left">
+      <strong style="color:var(--text)">¿Olvidaste tu contraseña?</strong><br>
+      Contacta al administrador del sistema para que la restablezca desde el panel de <em>Gestión de Usuarios</em>.<br><br>
+      <span style="color:var(--text3)">Si eres el administrador, usa la variable de entorno <code>ADMIN_RESET_PASS</code> en Render.</span>
+    </div>
   </div>
 </div>
 
@@ -2662,6 +2670,11 @@ function checkSession(){
   }
   document.getElementById('login-screen').style.display='flex';
   return false;
+}
+
+function mostrarOlvidePass(){
+  const el=document.getElementById('login-forgot');
+  el.style.display=el.style.display==='none'?'block':'none';
 }
 
 async function login(){
