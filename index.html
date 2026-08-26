@@ -142,8 +142,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg3);color:var
 
 /* ── GALERÍA FOTOS ── */
 .foto-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.foto-thumb{width:72px;height:72px;object-fit:cover;border-radius:var(--r);border:0.5px solid var(--border);cursor:pointer;transition:opacity .15s}
+.foto-thumb-wrap{position:relative;display:inline-block}
+.foto-thumb{width:72px;height:72px;object-fit:cover;border-radius:var(--r);border:0.5px solid var(--border);cursor:pointer;transition:opacity .15s;display:block}
 .foto-thumb:hover{opacity:.8}
+.foto-thumb-del{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:500;cursor:pointer}
 .lightbox img{max-width:90vw;max-height:90vh;border-radius:var(--rl)}
 
@@ -289,7 +291,11 @@ async function initDB(){
   DB.pacientes_master = pm;
   DB.usuarios = usr;
   DB.ars = ars || ['Privado','ARS Humano','ARS Senasa','ARS Universal','Otro'];
-  // Recalculate paciente_actual (computed field from server, rebuild locally too)
+  recalcPacienteActual();
+}
+
+// Recalculate paciente_actual (computed field from server, rebuild locally too)
+function recalcPacienteActual(){
   DB.maquinas.forEach(m=>m.paciente_actual=null);
   DB.registros.filter(r=>r.estatus==='Activo'&&r.maquina).forEach(r=>{
     const m=DB.maquinas.find(x=>x.id===r.maquina);
@@ -460,6 +466,12 @@ function arsOpts(selected=''){
 }
 
 const ARS_PUBLICAS = ['Senasa Subsidiado','Senasa Contributivo','Semma'];
+function parametrosOpts(selected=''){
+  const vals=[100,125,150,175,200,225,250,275,300];
+  return `<option value="">— Seleccionar presión —</option>` +
+    vals.map(v=>`<option value="${v}"${String(v)===String(selected)?' selected':''}>${v} mmHg</option>`).join('');
+}
+
 function arsOptsGrouped(selected=''){
   const publicas = ARS_PUBLICAS.filter(a=>DB.ars.includes(a));
   const privadas = DB.ars.filter(a=>!ARS_PUBLICAS.includes(a)&&a!=='Privado (Sin ARS)');
@@ -846,7 +858,7 @@ function verPacienteDetalle(nombre){
           <td>${c.condicion_retorno?condBadge(c.condicion_retorno):'<span style="color:var(--text3)">—</span>'}</td>
           <td>${stBadge(c.estatus)}</td>
           <td style="font-weight:600">${c.facturacion?fmt(c.facturacion):'—'}</td>
-          <td style="white-space:nowrap"><button class="btn btn-sm btn-ghost" title="Generar conduce" onclick="event.stopPropagation();generarConduce('${c.id}')"><i class="ti ti-printer"></i></button> <button class="btn btn-sm btn-danger" title="Eliminar" onclick="event.stopPropagation();eliminarColocacion('${c.id}')"><i class="ti ti-trash"></i></button></td>
+          <td style="white-space:nowrap"><button class="btn btn-sm btn-ghost" title="Editar colocación" onclick="event.stopPropagation();abrirEditarColocacion('${c.id}')"><i class="ti ti-pencil"></i></button> <button class="btn btn-sm btn-ghost" title="Generar conduce" onclick="event.stopPropagation();generarConduce('${c.id}')"><i class="ti ti-printer"></i></button> <button class="btn btn-sm btn-danger" title="Eliminar" onclick="event.stopPropagation();eliminarColocacion('${c.id}')"><i class="ti ti-trash"></i></button></td>
         </tr>
         ${(c.notas||(c.productos&&c.productos.length)||(c.fotos&&c.fotos.length))?`<tr><td colspan="10" style="font-size:11px;color:var(--text2);padding:6px 13px 10px;background:var(--bg2)">${c.notas?`<div style="margin-bottom:4px">💬 ${c.notas}</div>`:''}${renderProductosEnHistorial(c.productos)}${renderGaleriaFotos(c.fotos)}</td></tr>`:''}`).join('')}
       </tbody>
@@ -861,23 +873,17 @@ function verPacienteDetalle(nombre){
 // ══════════════════════════════════════════════════════════════════════════════
 function renderColocaciones(){
   const activos=DB.registros.filter(r=>r.estatus==='Activo');
-  const total=DB.registros.length;
+  const conEquipo=activos.filter(r=>r.maquina);
   document.getElementById('content').innerHTML=`
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
-  <div class="metric"><div class="metric-label">Total colocaciones</div><div class="metric-val">${total}</div></div>
-  <div class="metric"><div class="metric-label">En curso</div><div class="metric-val ok">${activos.length}</div><div class="metric-sub">con equipo asignado</div></div>
-  <div class="metric"><div class="metric-label">Finalizadas</div><div class="metric-val">${DB.registros.filter(r=>r.estatus==='Desactivado').length}</div></div>
-  <div class="metric"><div class="metric-label">Facturado total</div><div class="metric-val" style="font-size:15px">${fmt(DB.registros.reduce((s,r)=>s+(r.facturacion||0),0))}</div></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+  <div class="metric"><div class="metric-label">Pacientes activos</div><div class="metric-val ok">${activos.length}</div></div>
+  <div class="metric"><div class="metric-label">Con equipo asignado</div><div class="metric-val">${conEquipo.length}</div></div>
+  <div class="metric"><div class="metric-label">Facturado (activas)</div><div class="metric-val" style="font-size:15px">${fmt(activos.reduce((s,r)=>s+(r.facturacion||0),0))}</div></div>
 </div>
 
 <div class="tbl-wrap">
   <div class="search-bar">
     <input type="text" placeholder="Buscar paciente, cédula, motivo..." id="srch-col" oninput="filterColocaciones()">
-    <select id="fil-est-col" onchange="filterColocaciones()">
-      <option value="">Todos los estados</option>
-      <option value="Activo">En curso</option>
-      <option value="Desactivado">Finalizadas</option>
-    </select>
     <button class="btn btn-primary btn-sm" onclick="abrirColocacion(null)"><i class="ti ti-plus"></i>Nueva colocación</button>
   </div>
   <table class="tbl">
@@ -890,10 +896,9 @@ function renderColocaciones(){
 
 function filterColocaciones(){
   const q=(document.getElementById('srch-col')||{}).value?.toLowerCase()||'';
-  const est=(document.getElementById('fil-est-col')||{}).value||'';
   const rows=[...DB.registros].reverse().filter(r=>
-    (!q||[r.nombre,r.cedula,r.motivo,r.lesion].some(x=>x&&x.toLowerCase().includes(q)))&&
-    (!est||r.estatus===est)
+    r.estatus==='Activo'&&
+    (!q||[r.nombre,r.cedula,r.motivo,r.lesion].some(x=>x&&x.toLowerCase().includes(q)))
   );
   const tb=document.getElementById('tbody-col');if(!tb)return;
   tb.innerHTML=rows.map(r=>{
@@ -917,6 +922,7 @@ function filterColocaciones(){
       <td>${stBadge(r.estatus)}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();verPacienteDetalle('${esc(r.nombre)}')"><i class="ti ti-eye"></i></button>
+        <button class="btn btn-sm btn-ghost" title="Editar colocación" onclick="event.stopPropagation();abrirEditarColocacion('${esc(r.id)}')"><i class="ti ti-pencil"></i></button>
         <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();generarConduce('${esc(r.id)}')"><i class="ti ti-printer"></i></button>
         ${r.estatus==='Activo'?`
           <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();abrirCambiarEquipo('${esc(r.id)}')" title="${r.maquina?'Cambiar equipo':'Asignar equipo'}">
@@ -926,7 +932,7 @@ function filterColocaciones(){
         `:''}
       </td>
     </tr>`;
-  }).join('')||`<tr><td colspan="9"><div class="empty-state"><i class="ti ti-stack-2"></i>No hay colocaciones registradas</div></td></tr>`;
+  }).join('')||`<tr><td colspan="9"><div class="empty-state"><i class="ti ti-stack-2"></i>No hay pacientes con colocación activa</div></td></tr>`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1040,6 +1046,7 @@ function filterRegistro(){
     <td style="font-size:12px;color:var(--text2);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.notas||'').replace(/"/g,'&quot;')}">${r.motivo||'—'}${r.notas?` <span style="cursor:help">💬</span>`:''}</td>
     <td style="font-weight:600;white-space:nowrap">${r.facturacion?fmt(r.facturacion):'—'}</td>
     <td style="white-space:nowrap">
+      <button class="btn btn-sm btn-ghost" title="Editar colocación" onclick="event.stopPropagation();abrirEditarColocacion('${r.id}')"><i class="ti ti-pencil"></i></button>
       <button class="btn btn-sm btn-ghost" title="Generar conduce" onclick="event.stopPropagation();generarConduce('${r.id}')"><i class="ti ti-printer"></i></button>
       <button class="btn btn-sm btn-danger" title="Eliminar colocación" onclick="event.stopPropagation();eliminarColocacion('${r.id}')"><i class="ti ti-trash"></i></button>
     </td>
@@ -1511,12 +1518,7 @@ function abrirColocacion(nombrePreset){
       </select>
     </div>
     <div class="form-group span2"><label>Parámetros / configuración del equipo</label>
-      <select id="col-parametros">
-        <option value="">— Seleccionar presión —</option>
-        <option value="100">100 mmHg</option>
-        <option value="200">200 mmHg</option>
-        <option value="300">300 mmHg</option>
-      </select>
+      <select id="col-parametros">${parametrosOpts()}</select>
     </div>
     <div class="form-group span2"><label>Notas / observaciones clínicas</label><textarea id="col-notas" placeholder="Estado del paciente, indicaciones especiales, seguimiento..."></textarea></div>
     <div class="section-divider">Seguimiento</div>
@@ -1647,6 +1649,123 @@ async function guardarColocacion(){
   }catch(e){showToast('Error al guardar: '+e.message,true);return;}
   closeModal();
   ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas})[VIEW]?.();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EDITAR COLOCACIÓN
+// ══════════════════════════════════════════════════════════════════════════════
+function abrirEditarColocacion(id){
+  const reg=DB.registros.find(r=>r.id===id);if(!reg)return;
+  const maqDisp=DB.maquinas.filter(m=>!m.paciente_actual||m.id===reg.maquina);
+  document.getElementById('modal-root').innerHTML=`
+<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <button class="modal-close" onclick="closeModal()">✕</button>
+  <div class="modal-title">Editar colocación — ${esc(reg.nombre)}</div>
+  <div class="form-grid">
+    <div class="form-group"><label>Fecha *</label><input type="date" id="ec2-fecha" value="${reg.fecha||''}"></div>
+    <div class="form-group"><label>N° Colocación</label><input type="text" id="ec2-num" value="${esc(reg.motivo)||''}" placeholder="1era Colocacion"></div>
+    <div class="form-group"><label>Máquina asignada</label>
+      <select id="ec2-maq">
+        <option value="">Sin máquina asignada</option>
+        ${maqDisp.map(m=>`<option value="${m.id}" ${m.id===reg.maquina?'selected':''}>${esc(m.nombre)} (Serial: ${esc(m.serial)||'—'})</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Área de lesión</label><input type="text" id="ec2-lesion" value="${esc(reg.lesion)||''}"></div>
+    <div class="form-group"><label>Dirección / Centro</label><input type="text" id="ec2-dir" value="${esc(reg.direccion)||''}"></div>
+    <div class="form-group"><label>Teléfono</label><input type="text" id="ec2-tel" value="${esc(reg.tel1)||''}"></div>
+    <div class="form-group"><label>ARS / Seguro</label><select id="ec2-ars">${arsOptsGrouped(reg.ars)}</select></div>
+    <div class="form-group"><label>Dr. que refiere</label><input type="text" id="ec2-dr" value="${esc(reg.dr_refiere)||''}"></div>
+    <div class="form-group"><label>Monto del Conduce (DOP)</label><input type="number" id="ec2-fact" value="${reg.facturacion||0}" min="0"></div>
+    <div class="form-group"><label>Saldo pendiente (DOP)</label><input type="number" id="ec2-saldo" value="${reg.saldo_pendiente||0}" min="0"></div>
+    <div class="section-divider">Condiciones de uso del equipo</div>
+    <div class="form-group"><label>Modo de uso</label>
+      <select id="ec2-modo">
+        <option value="Consulta" ${reg.modo_uso==='Consulta'?'selected':''}>Consulta (en clínica)</option>
+        <option value="Domicilio" ${reg.modo_uso==='Domicilio'?'selected':''}>Domicilio</option>
+        <option value="Hospitalario" ${reg.modo_uso==='Hospitalario'?'selected':''}>Hospitalario</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Condición del equipo al entregar</label>
+      <select id="ec2-cond-salida">
+        <option value="Óptima" ${reg.condicion_salida==='Óptima'?'selected':''}>Óptima</option>
+        <option value="Buena" ${reg.condicion_salida==='Buena'?'selected':''}>Buena</option>
+        <option value="Requiere revisión" ${reg.condicion_salida==='Requiere revisión'?'selected':''}>Requiere revisión</option>
+      </select>
+    </div>
+    <div class="form-group span2"><label>Parámetros / configuración del equipo</label>
+      <select id="ec2-parametros">${parametrosOpts(reg.parametros)}</select>
+    </div>
+    <div class="form-group span2"><label>Notas / observaciones clínicas</label><textarea id="ec2-notas">${esc(reg.notas)||''}</textarea></div>
+    <div class="section-divider">Seguimiento</div>
+    <div class="form-group"><label>Próxima visita estimada</label><input type="date" id="ec2-proxima" value="${reg.proxima_colocacion||''}"></div>
+    <div class="section-divider">Retiro</div>
+    <div class="form-group"><label>Estado</label>
+      <select id="ec2-estatus">
+        <option value="Activo" ${reg.estatus==='Activo'?'selected':''}>Activo</option>
+        <option value="Desactivado" ${reg.estatus==='Desactivado'?'selected':''}>Desactivado</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Fecha de retiro</label><input type="date" id="ec2-fretiro" value="${reg.fecha_retiro||''}"></div>
+    <div class="form-group span2"><label>Observaciones de retiro</label><textarea id="ec2-obsretiro">${esc(reg.observaciones_retiro)||''}</textarea></div>
+    <div class="section-divider">Productos utilizados</div>
+    <div class="form-group span2">
+      <div id="ec2-productos-list"></div>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="addProductoRow('ec2-productos-list')"><i class="ti ti-plus"></i> Agregar producto</button>
+      <div id="ec2-prod-total" class="prod-total"></div>
+    </div>
+    <div class="section-divider">Fotos de la colocación</div>
+    <div class="form-group span2">
+      <label><i class="ti ti-camera" style="vertical-align:-2px"></i> Agregar fotos</label>
+      <input type="file" id="ec2-fotos" multiple accept="image/*" onchange="addFotoPreview(this,'ec2-foto-preview')" style="font-size:12px">
+      <div id="ec2-foto-preview" class="foto-thumbs" style="margin-top:8px"></div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Haz clic en la ✕ de una foto para quitarla de esta colocación.</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-primary" style="flex:1" onclick="guardarEditarColocacion('${id}')"><i class="ti ti-device-floppy"></i>Guardar cambios</button>
+    <button class="btn" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+</div>`;
+  (reg.productos||[]).forEach(p=>addProductoRow('ec2-productos-list',p));
+  prefillFotoPreview('ec2-foto-preview', reg.fotos);
+}
+
+async function guardarEditarColocacion(id){
+  const reg=DB.registros.find(r=>r.id===id);if(!reg)return;
+  const nuevoMaq=document.getElementById('ec2-maq').value;
+  const cambios={
+    fecha:document.getElementById('ec2-fecha').value,
+    motivo:document.getElementById('ec2-num').value,
+    maquina:nuevoMaq,
+    lesion:document.getElementById('ec2-lesion').value,
+    direccion:document.getElementById('ec2-dir').value,
+    tel1:document.getElementById('ec2-tel').value,
+    ars:document.getElementById('ec2-ars').value,
+    dr_refiere:document.getElementById('ec2-dr').value,
+    facturacion:parseFloat(document.getElementById('ec2-fact').value)||0,
+    saldo_pendiente:parseFloat(document.getElementById('ec2-saldo').value)||0,
+    modo_uso:document.getElementById('ec2-modo').value,
+    condicion_salida:document.getElementById('ec2-cond-salida').value,
+    parametros:document.getElementById('ec2-parametros').value,
+    notas:document.getElementById('ec2-notas').value,
+    proxima_colocacion:document.getElementById('ec2-proxima').value||null,
+    estatus:document.getElementById('ec2-estatus').value,
+    fecha_retiro:document.getElementById('ec2-fretiro').value||null,
+    observaciones_retiro:document.getElementById('ec2-obsretiro').value,
+    productos:getProductosFromList('ec2-productos-list'),
+    fotos:getFotosFromPreview('ec2-foto-preview'),
+  };
+  try{
+    const actualizado=await api.put('/registros/'+id,cambios);
+    const idx=DB.registros.findIndex(r=>r.id===id);
+    if(idx>-1) DB.registros[idx]=actualizado;
+    recalcPacienteActual();
+    showToast('Colocación actualizada');
+  }catch(e){showToast('Error: '+e.message,true);return;}
+  closeModal();
+  ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas,facturacion:renderFacturacion})[VIEW]?.();
 }
 
 function abrirNuevoPaciente(){
@@ -1862,39 +1981,72 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 // ASIGNAR EQUIPO — modal enfocado en selección de máquina
 // ══════════════════════════════════════════════════════════════════════════════
 function abrirAsignarEquipo(nombre){
-  const maqDisp = DB.maquinas.filter(m=>!m.paciente_actual && m.estado==='Operativa');
-  const maqTodas = DB.maquinas;
-  // Auto-calcular N° colocación
-  const p = getPacientesUnicos().find(x=>x.nombre===nombre);
+  // Si el paciente ya tiene una máquina activa, esto es un cambio de equipo,
+  // no una colocación nueva — reusar el flujo que actualiza el registro existente.
+  const activeReg = DB.registros.find(r=>r.nombre===nombre && r.estatus==='Activo');
+  if(activeReg && activeReg.maquina){
+    abrirCambiarEquipo(activeReg.id);
+    return;
+  }
+
+  const p = getPacientesUnicos().find(x=>x.nombre===nombre) || {colocaciones:[]};
+  // ¿Es la primera asignación (registro creado al dar de alta al paciente, sin máquina aún)?
+  const esPrimeraAsignacion = !!activeReg;
   const etiquetas=['1era','2da','3era','4ta','5ta','6ta','7ma','8va','9na','10ma'];
-  const totalColoc = p ? p.colocaciones.length : 0;
-  const numColoc = (etiquetas[totalColoc]||`${totalColoc+1}ra`) + ' Colocacion';
-  const numReadonly = totalColoc > 0;
+  const totalColocPrevias = p.colocaciones.filter(c=>!(activeReg&&c.id===activeReg.id)).length;
+  const numColoc = (activeReg&&activeReg.motivo) || (etiquetas[totalColocPrevias]||`${totalColocPrevias+1}ra`)+' Colocacion';
+  const numReadonly = totalColocPrevias > 0;
+
+  // Si el paciente ya usó una máquina antes y sigue disponible, se reasigna la misma
+  // sin obligar a elegir de nuevo (punto: la máquina ya estaría asignada desde el inicio).
+  const maqAnteriorId = !esPrimeraAsignacion ? p.maquina : '';
+  const maqAnterior = maqAnteriorId ? DB.maquinas.find(m=>m.id===maqAnteriorId) : null;
+  const maqAnteriorDisponible = maqAnterior && !maqAnterior.paciente_actual && maqAnterior.estado==='Operativa';
+  const maqDisp = DB.maquinas.filter(m=>!m.paciente_actual && m.estado==='Operativa');
+
   document.getElementById('modal-root').innerHTML=`
 <div class="overlay" onclick="if(event.target===this)closeModal()">
 <div class="modal">
   <button class="modal-close" onclick="closeModal()">✕</button>
-  <div class="modal-title"><i class="ti ti-device-laptop-medical" style="color:var(--brand);margin-right:6px;vertical-align:-2px"></i>Asignar equipo — ${nombre}</div>
+  <div class="modal-title"><i class="ti ti-device-laptop-medical" style="color:var(--brand);margin-right:6px;vertical-align:-2px"></i>Asignar equipo — ${esc(nombre)}</div>
 
-  <div style="margin-bottom:14px">
+  <div style="margin-bottom:14px" id="maq-selector-wrap">
+    ${maqAnteriorDisponible?`
+    <div id="maq-auto-info" style="padding:10px 12px;background:var(--brand-dim);border-radius:var(--r);font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span><i class="ti ti-device-laptop-medical"></i> Se reasignará la misma máquina: <strong>${esc(maqAnterior.nombre)}</strong> (Serial: ${esc(maqAnterior.serial)||'—'})</span>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="mostrarSelectorMaq()">Usar otra máquina</button>
+    </div>
+    <div id="maq-selector-grid" style="display:none">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin:12px 0 8px">Equipos disponibles</div>
+      ${maqDisp.length===0?`<div class="empty-state" style="padding:16px"><i class="ti ti-circle-x" style="font-size:24px"></i><br>Todas las máquinas están en uso</div>`:`
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px" id="maq-selector">
+        ${maqDisp.map(m=>`
+        <div class="maq-card" id="msel-${m.id}" onclick="seleccionarMaq('${m.id}')" style="cursor:pointer">
+          <div style="font-size:10px;font-weight:700;color:var(--text3)">${m.id}</div>
+          <div style="font-weight:700;font-size:13px">${esc(m.nombre)}</div>
+          <div style="font-size:11px;color:var(--text2)">Serial: ${esc(m.serial)||'—'}</div>
+          <div style="font-size:11px;color:var(--text2)">${esc(m.ubicacion)||''}</div>
+        </div>`).join('')}
+      </div>`}
+    </div>`:`
     <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Equipos disponibles</div>
+    ${maqAnteriorId?`<div style="font-size:11px;color:var(--warn-t);margin-bottom:8px">La máquina usada anteriormente (${esc(maqAnterior?.nombre)||maqAnteriorId}) no está disponible ahora mismo — selecciona otra.</div>`:''}
     ${maqDisp.length===0?`<div class="empty-state" style="padding:16px"><i class="ti ti-circle-x" style="font-size:24px"></i><br>Todas las máquinas están en uso</div>`:`
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px" id="maq-selector">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px" id="maq-selector">
       ${maqDisp.map(m=>`
       <div class="maq-card" id="msel-${m.id}" onclick="seleccionarMaq('${m.id}')" style="cursor:pointer">
         <div style="font-size:10px;font-weight:700;color:var(--text3)">${m.id}</div>
-        <div style="font-weight:700;font-size:13px">${m.nombre}</div>
-        <div style="font-size:11px;color:var(--text2)">Serial: ${m.serial||'—'}</div>
-        <div style="font-size:11px;color:var(--text2)">${m.ubicacion||''}</div>
+        <div style="font-weight:700;font-size:13px">${esc(m.nombre)}</div>
+        <div style="font-size:11px;color:var(--text2)">Serial: ${esc(m.serial)||'—'}</div>
+        <div style="font-size:11px;color:var(--text2)">${esc(m.ubicacion)||''}</div>
       </div>`).join('')}
-    </div>`}
+    </div>`}`}
   </div>
 
-  <input type="hidden" id="aeq-maqid" value="">
+  <input type="hidden" id="aeq-maqid" value="${maqAnteriorDisponible?maqAnteriorId:''}">
   <div class="form-grid">
     <div class="form-group"><label>Fecha *</label><input type="date" id="aeq-fecha" value="${new Date().toISOString().split('T')[0]}"></div>
-    <div class="form-group"><label>N° Colocación</label><input type="text" id="aeq-num" value="${numColoc}" ${numReadonly?'readonly style="background:var(--bg2)"':''} placeholder="1era Colocacion"></div>
-    <div class="form-group"><label>Área de lesión</label><input type="text" id="aeq-lesion" placeholder="Pierna Derecha, Pecho..."></div>
+    <div class="form-group"><label>N° Colocación</label><input type="text" id="aeq-num" value="${esc(numColoc)}" ${numReadonly?'readonly style="background:var(--bg2)"':''} placeholder="1era Colocacion"></div>
     <div class="form-group"><label>Modo de uso</label>
       <select id="aeq-modo"><option value="Consulta">Consulta</option><option value="Domicilio">Domicilio</option><option value="Hospitalario">Hospitalario</option></select>
     </div>
@@ -1903,12 +2055,7 @@ function abrirAsignarEquipo(nombre){
     </div>
     <div class="form-group"><label>Monto del Conduce (DOP)</label><input type="number" id="aeq-fact" placeholder="13000" min="0"></div>
     <div class="form-group span2"><label>Parámetros / configuración del equipo</label>
-      <select id="aeq-parametros">
-        <option value="">— Seleccionar presión —</option>
-        <option value="100">100 mmHg</option>
-        <option value="200">200 mmHg</option>
-        <option value="300">300 mmHg</option>
-      </select>
+      <select id="aeq-parametros">${parametrosOpts()}</select>
     </div>
     <div class="form-group span2"><label>Notas / observaciones clínicas</label><textarea id="aeq-notas" placeholder="Estado del paciente, indicaciones especiales, seguimiento..."></textarea></div>
     <div class="section-divider">Seguimiento</div>
@@ -1936,6 +2083,12 @@ function abrirAsignarEquipo(nombre){
 </div>`;
 }
 
+function mostrarSelectorMaq(){
+  const info=document.getElementById('maq-auto-info');if(info)info.style.display='none';
+  const grid=document.getElementById('maq-selector-grid');if(grid)grid.style.display='';
+  document.getElementById('aeq-maqid').value='';
+}
+
 function seleccionarMaq(id){
   document.querySelectorAll('#maq-selector .maq-card').forEach(c=>{
     c.style.borderColor='';c.style.background='';
@@ -1949,14 +2102,10 @@ async function guardarAsignarEquipo(nombre){
   const maqId=document.getElementById('aeq-maqid').value;
   const fecha=document.getElementById('aeq-fecha').value;
   if(!fecha){alert('La fecha es obligatoria.');return;}
+  const activeReg = DB.registros.find(r=>r.nombre===nombre && r.estatus==='Activo');
   const p=getPacientesUnicos().find(x=>x.nombre===nombre)||{};
-  const nuevo={
-    fecha,nombre,
-    cedula:p.cedula||'',sexo:p.sexo||'',edad:p.edad||null,
-    lesion:document.getElementById('aeq-lesion').value||p.lesion||'',
-    direccion:p.direccion||'',tel1:p.tel1||'',tel2:p.tel2||'',
-    dr_refiere:p.dr_refiere||'',ars:p.ars||'Privado',
-    maquina:maqId,estatus:'Activo',
+  const campos={
+    fecha,maquina:maqId,
     motivo:document.getElementById('aeq-num').value,
     facturacion:parseFloat(document.getElementById('aeq-fact').value)||0,
     modo_uso:document.getElementById('aeq-modo').value,
@@ -1964,22 +2113,33 @@ async function guardarAsignarEquipo(nombre){
     parametros:document.getElementById('aeq-parametros').value,
     notas:document.getElementById('aeq-notas').value,
     proxima_colocacion:document.getElementById('aeq-proxima').value||null,
-    notas_seguimiento:'',
     productos:getProductosFromList('aeq-productos-list'),
     fotos:getFotosFromPreview('aeq-foto-preview'),
-    fecha_retiro:null,condicion_retorno:'',observaciones_retiro:'',
   };
   try{
-    // The server deactivates previous active records for this patient
-    const creado=await api.post('/registros',nuevo);
-    // Deactivate locally too
-    DB.registros.filter(r=>r.nombre===nombre&&r.estatus==='Activo').forEach(r=>{
-      if(r.maquina){const m=DB.maquinas.find(x=>x.id===r.maquina);if(m)m.paciente_actual=null;}
-      r.estatus='Desactivado';
-    });
-    DB.registros.push(creado);
+    if(activeReg && !activeReg.maquina){
+      // Ya existe el registro de este paciente (creado al registrarlo) sin máquina aún:
+      // se actualiza ese mismo registro en vez de crear una colocación nueva.
+      const actualizado=await api.put('/registros/'+activeReg.id,campos);
+      const idx=DB.registros.findIndex(r=>r.id===activeReg.id);
+      if(idx>-1) DB.registros[idx]=actualizado;
+    }else{
+      const nuevo={
+        ...campos,nombre,
+        cedula:p.cedula||'',sexo:p.sexo||'',edad:p.edad||null,
+        lesion:p.lesion||'',
+        direccion:p.direccion||'',tel1:p.tel1||'',tel2:p.tel2||'',
+        dr_refiere:p.dr_refiere||'',ars:p.ars||'Privado',
+        estatus:'Activo',notas_seguimiento:'',
+        fecha_retiro:null,condicion_retorno:'',observaciones_retiro:'',
+      };
+      // Este paciente no tiene ningún registro activo (fue retirado antes), así que
+      // esto sí es una colocación nueva de verdad.
+      const creado=await api.post('/registros',nuevo);
+      DB.registros.push(creado);
+    }
     if(maqId){const m=DB.maquinas.find(x=>x.id===maqId);if(m)m.paciente_actual=nombre;}
-    showToast('Equipo asignado');
+    showToast(activeReg&&!activeReg.maquina?'Equipo asignado':'Colocación registrada');
   }catch(e){showToast('Error: '+e.message,true);return;}
   closeModal();
   ({dashboard:renderDash,pacientes:renderPacientes,colocaciones:renderColocaciones,registro:renderRegistro,maquinas:renderMaquinas})[VIEW]?.();
@@ -2490,22 +2650,36 @@ function renderProductosEnHistorial(productos){
 function agregarFotosSection(modalPrefix){
   // Called after modal opens — injects fotos section if container exists
 }
-function addFotoPreview(input, previewId){
+function crearFotoThumb(previewId, b64){
   const preview=document.getElementById(previewId);if(!preview)return;
+  const wrap=document.createElement('div');
+  wrap.className='foto-thumb-wrap';
+  const img=document.createElement('img');
+  img.src=b64;
+  img.className='foto-thumb';
+  img.dataset.b64=b64;
+  img.onclick=()=>abrirLightbox(b64);
+  const del=document.createElement('button');
+  del.type='button';
+  del.className='foto-thumb-del';
+  del.title='Quitar foto';
+  del.innerHTML='✕';
+  del.onclick=e=>{e.stopPropagation();wrap.remove();};
+  wrap.appendChild(img);
+  wrap.appendChild(del);
+  preview.appendChild(wrap);
+}
+function addFotoPreview(input, previewId){
   const files=Array.from(input.files);
   files.forEach(file=>{
     if(!file.type.startsWith('image/'))return;
     const reader=new FileReader();
-    reader.onload=e=>{
-      const img=document.createElement('img');
-      img.src=e.target.result;
-      img.className='foto-thumb';
-      img.dataset.b64=e.target.result;
-      img.onclick=()=>abrirLightbox(e.target.result);
-      preview.appendChild(img);
-    };
+    reader.onload=e=>crearFotoThumb(previewId, e.target.result);
     reader.readAsDataURL(file);
   });
+}
+function prefillFotoPreview(previewId, fotos){
+  (fotos||[]).forEach(f=>crearFotoThumb(previewId, f));
 }
 function getFotosFromPreview(previewId){
   const preview=document.getElementById(previewId);if(!preview)return[];
