@@ -56,3 +56,8 @@ Para agregar equipos de prueba adicionales, agrega entradas al array `DB.product
 
 ---
 *Desarrollado para el sector médico / adaptable a cualquier rubro de activos físicos*
+
+
+---
+Desarrollado por [Erick Hernández Arias](https://erickhernandezarias.net) — Web Designer & Full-Stack Developer, Santo Domingo, República Dominicana.
+Caso de estudio: [erickhernandezarias.net/proyecto-dipromes.html](https://www.erickhernandezarias.net/proyecto-dipromes.html)
